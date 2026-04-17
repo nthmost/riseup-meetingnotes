@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}NB Meeting Notes Archive{% endblock %}
+{% block head %}
+<style>
+  body { padding: 0; }
+  .outer {
+    height: calc(100vh - 40px);
+    margin: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .badge-up   { color: #008000; font-weight: bold; }
+  .badge-down { color: #c00000; font-weight: bold; }
+  .badge-none { color: #808080; }
+  .row-attention td { background: #ffff80 !important; }
+  .win-filetable tbody tr.row-attention:hover td { background: #000080 !important; color: #fff !important; }
+  .issue-tag {
+    display: inline-block;
+    background: #ffffc0;
+    border: 1px solid #808080;
+    padding: 0 4px;
+    font-size: 10px;
+    margin-left: 2px;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="outer">
+  <div class="win-window" style="flex:1; min-height:0; display:flex; flex-direction:column;">
+
+    <div class="win-titlebar">
+      <span class="title-icon">📁</span>
+      <span class="title-text">Noisebridge Meeting Notes Archive</span>
+      <div class="win-controls">
+        {% if current_user %}
+          <span style="font-size:10px; opacity:0.9; padding-right:6px;">{{ current_user }}</span>
+          <a href="/logout" style="color:#fff; font-size:10px;">logout</a>
+        {% else %}
+          <a href="/login" style="color:#fff; font-size:10px;">login</a>
+        {% endif %}
+        &nbsp;
+        <div class="win-ctrl-btn">_</div>
+        <div class="win-ctrl-btn">□</div>
+        <div class="win-ctrl-btn">✕</div>
+      </div>
+    </div>
+
+    <div class="win-menubar">
+      <span class="win-menu-item"><u>F</u>ile</span>
+      <span class="win-menu-item"><u>V</u>iew</span>
+      <span class="win-menu-item"><u>H</u>elp</span>
+    </div>
+
+    <div class="win-toolbar">
+      <span class="muted" style="padding:2px 4px; font-size:10px;">Path:</span>
+      <div class="win-pathbar">nbmeetingnotes\archive\</div>
+    </div>
+
+    <div class="win-body">
+      <div class="win-inset">
+        {% if captures %}
+        <table class="win-filetable">
+          <thead>
+            <tr>
+              <th style="width:20px;"></th>
+              <th>Meeting Date</th>
+              <th>Archived (UTC)</th>
+              <th>Size</th>
+              <th>Passes</th>
+              <th>Published</th>
+              <th>Rating</th>
+              <th>Issues</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in captures %}
+            {% set txn = c._latest_txn %}
+            {% set rating = txn._rating if txn else none %}
+            <tr onclick="location.href='/view/{{ c.meeting_date }}'"
+                class="{{ 'row-attention' if c._needs_attention else '' }}">
+              <td style="text-align:center; font-size:14px;">📄</td>
+              <td><a href="/view/{{ c.meeting_date }}"><strong>{{ c._date_pretty }}</strong></a></td>
+              <td class="monospace">{{ c._fetched_pretty }}</td>
+              <td class="monospace">{{ c._size_pretty }}</td>
+              <td style="text-align:center;">
+                {% if txn %}
+                  <a href="/history/{{ c.meeting_date }}">{{ c._pass_count }}</a>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if txn and txn.published_to %}
+                  <span class="badge-pub">{{ txn.published_to }}</span>
+                {% else %}
+                  <span class="badge-unpub">—</span>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">
+                {% if not txn %}
+                  <span class="badge-none">—</span>
+                {% elif rating.total == 0 %}
+                  <span class="badge-none">—</span>
+                {% elif rating.down > 0 %}
+                  <span class="badge-down">👎 {{ rating.down }}</span>
+                {% else %}
+                  <span class="badge-up">👍 {{ rating.up }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if rating and rating.issues %}
+                  {% for issue in rating.issues %}
+                    <span class="issue-tag">{{ issue_labels.get(issue, issue) }}</span>
+                  {% endfor %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div style="padding:40px; text-align:center; color:#808080;">
+          No archived meetings yet.<br>
+          <span style="font-size:10px;">Archive populates after each Tuesday meeting.</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="win-statusbar">
+      <div class="win-status-cell wide">{{ captures|length }} meeting{{ 's' if captures|length != 1 else '' }} archived</div>
+      <div class="win-status-cell">Noisebridge Meeting Notes Archive</div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

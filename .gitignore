@@ -1,0 +1,27 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment / secrets
+.env
+.env.*
+*.env
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs and runtime output
+/var/
+*.log
+
+# OS
+.DS_Store
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/

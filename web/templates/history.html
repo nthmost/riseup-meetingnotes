@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}History — {{ capture._date_pretty }}{% endblock %}
+{% block head %}
+<style>
+  body { padding: 0; }
+  .outer {
+    height: calc(100vh - 40px);
+    margin: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .txn-block {
+    border: 2px solid;
+    border-color: #dfdfdf #808080 #808080 #dfdfdf;
+    background: #fff;
+    margin-bottom: 8px;
+  }
+  .txn-header {
+    background: #c0c0c0;
+    border-bottom: 1px solid #808080;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: bold;
+  }
+  .txn-body {
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 20px;
+    font-size: 11px;
+  }
+  .meta-row { display:flex; gap:6px; }
+  .meta-key { color:#808080; min-width:140px; }
+  .rating-row {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #e0e0e0;
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rating-entry {
+    border: 1px solid #c0c0c0;
+    padding: 4px 8px;
+    background: #f8f8f8;
+    font-size: 11px;
+  }
+  .issue-tag {
+    display:inline-block; background:#ffffc0;
+    border:1px solid #808080; padding:0 4px;
+    font-size:10px; margin-left:2px;
+  }
+  .pass-up   { color:#008000; }
+  .pass-down { color:#c00000; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="outer">
+  <div class="win-window" style="flex:1; min-height:0; display:flex; flex-direction:column;">
+
+    <div class="win-titlebar">
+      <span class="title-icon">📋</span>
+      <span class="title-text">Transformation History — {{ capture._date_pretty }}</span>
+      <div class="win-controls">
+        <div class="win-ctrl-btn">_</div>
+        <div class="win-ctrl-btn">□</div>
+        <div class="win-ctrl-btn">✕</div>
+      </div>
+    </div>
+
+    <div class="win-toolbar">
+      <a href="/"><button class="win-btn">◀ Archive</button></a>
+      <a href="/view/{{ capture.meeting_date }}"><button class="win-btn">👁 View Latest</button></a>
+      <a href="/raw/{{ capture.meeting_date }}"><button class="win-btn">📄 Raw TXT</button></a>
+    </div>
+
+    <div class="win-body">
+      <div class="win-inset" style="padding:8px;">
+
+        <!-- Capture metadata -->
+        <div style="font-size:11px; margin-bottom:12px; padding:6px 8px; background:#f0f0f0; border:1px solid #c0c0c0;">
+          <strong>Raw Capture</strong> &nbsp;·&nbsp;
+          {{ capture._fetched_pretty }} &nbsp;·&nbsp;
+          Source: <span class="monospace">{{ capture.source_url }}</span> &nbsp;·&nbsp;
+          SHA256: <span class="monospace">{{ capture.sha256[:16] }}…</span> &nbsp;·&nbsp;
+          {{ capture._size_pretty }}
+        </div>
+
+        {% if not txns %}
+          <div style="padding:20px; color:#808080; text-align:center;">
+            No transformations yet. Run the pipeline to process this capture.
+          </div>
+        {% endif %}
+
+        {% for txn in txns %}
+        <div class="txn-block">
+          <div class="txn-header">
+            <span>
+              {% if txn.pipeline_script == 'wiki-import' %}
+                📥 Pre-existing wiki publication
+              {% else %}
+                Pass {{ loop.index }}
+              {% endif %}
+            </span>
+            {% set r = txn._rating %}
+            {% if r.total == 0 %}
+              <span style="color:#808080; font-weight:normal;">unrated</span>
+            {% elif r.down > 0 %}
+              <span class="pass-down">👎 {{ r.down }} thumbs down</span>
+            {% else %}
+              <span class="pass-up">👍 {{ r.up }} thumbs up</span>
+            {% endif %}
+            {% if txn.parent_id %}
+              <span style="font-weight:normal; font-size:10px; color:#808080;">
+                (re-run from pass
+                {% for t in txns if t.id == txn.parent_id %}{{ loop.index }}{% endfor %})
+              </span>
+            {% endif %}
+            <span style="margin-left:auto; font-weight:normal;">
+              <a href="/view/{{ capture.meeting_date }}?txn={{ txn.id }}">View this pass ↗</a>
+            </span>
+          </div>
+
+          <div class="txn-body">
+            <div class="meta-row"><span class="meta-key">Ran at:</span><span>{{ txn._run_at_pretty }}</span></div>
+            <div class="meta-row"><span class="meta-key">Pipeline version:</span><span class="monospace">{{ txn.pipeline_version }}</span></div>
+            <div class="meta-row"><span class="meta-key">Script:</span><span class="monospace">{{ txn.pipeline_script }}</span></div>
+            <div class="meta-row">
+              <span class="meta-key">Wrapper version:</span>
+              <span class="monospace">{{ txn.pipeline_version }}</span>
+              <span class="muted" style="margin-left:6px; font-size:10px;">(nbmeetingnotes)</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Processor version:</span>
+              <span class="monospace">{{ txn.processor_version or '—' }}</span>
+              <span class="muted" style="margin-left:6px; font-size:10px;">(process_meeting_notes.py)</span>
+            </div>
+            <div class="meta-row"><span class="meta-key">Model:</span><span>{{ txn.model_name or '—' }}</span></div>
+            <div class="meta-row"><span class="meta-key">Duration:</span><span>{{ ('%.2f'|format(txn.duration_seconds)) + 's' if txn.duration_seconds else '—' }}</span></div>
+            <div class="meta-row">
+              <span class="meta-key">Token usage:</span>
+              <span>
+                {% if txn._token_usage %}
+                  in={{ txn._token_usage.get('input_tokens','?') }}
+                  out={{ txn._token_usage.get('output_tokens','?') }}
+                  {% if txn._token_usage.get('cost_usd') %}
+                    (${{ '%.4f'|format(txn._token_usage.cost_usd) }})
+                  {% endif %}
+                {% else %}—{% endif %}
+              </span>
+            </div>
+            <div class="meta-row"><span class="meta-key">Artifacts removed:</span><span>{{ txn.artifact_lines_removed if txn.artifact_lines_removed is not none else '—' }}</span></div>
+            <div class="meta-row"><span class="meta-key">Sections found:</span><span>{{ txn.sections_found if txn.sections_found is not none else '—' }}</span></div>
+            <div class="meta-row">
+              <span class="meta-key">Input source:</span>
+              <span>
+                {% if txn.source_wiki_revid %}
+                  Wiki revision
+                  <a href="https://www.noisebridge.net/index.php?oldid={{ txn.source_wiki_revid }}"
+                     target="_blank" class="monospace">{{ txn.source_wiki_revid }} ↗</a>
+                  of <em>{{ txn.source_wiki_page }}</em>
+                {% elif txn.parent_id %}
+                  Parent pass output
+                {% else %}
+                  Raw pad capture
+                {% endif %}
+              </span>
+            </div>
+            <div class="meta-row"><span class="meta-key">Input SHA256:</span><span class="monospace">{{ txn.input_sha256[:16] }}…</span></div>
+            <div class="meta-row"><span class="meta-key">Output SHA256:</span><span class="monospace">{{ txn.output_sha256[:16] + '…' if txn.output_sha256 else '—' }}</span></div>
+            <div class="meta-row"><span class="meta-key">Flags:</span><span class="monospace">{{ txn._flags }}</span></div>
+            <div class="meta-row"><span class="meta-key">Published to:</span>
+              <span>
+                {% if txn.published_to %}
+                  <a href="https://www.noisebridge.net/wiki/{{ txn.published_to }}" target="_blank">
+                    {{ txn.published_to }} ↗
+                  </a>
+                  ({{ txn._published_at_pretty }})
+                {% else %}—{% endif %}
+              </span>
+            </div>
+
+            {% if txn._ratings %}
+            <div class="rating-row">
+              <strong>Ratings:</strong>
+              {% for rating in txn._ratings %}
+              <div class="rating-entry">
+                <strong>{{ '👍' if rating.rating == 'up' else '👎' }}</strong>
+                by <em>{{ rating.rated_by }}</em>
+                at {{ rating.rated_at[:16].replace('T',' ') }} UTC
+                {% set issues = rating.issues|from_json if rating.issues else [] %}
+                {% for issue in issues %}
+                  <span class="issue-tag">{{ issue_labels.get(issue, issue) }}</span>
+                {% endfor %}
+                {% if rating.problem_description %}
+                  <br><span style="color:#808080;">{{ rating.problem_description }}</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if current_user and txns %}
+        <div style="margin-top:8px;">
+          <form method="post" action="/rerun/{{ txns[-1].id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn">↩ Re-run pipeline from latest pass</button>
+          </form>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <div class="win-statusbar">
+      <div class="win-status-cell wide">{{ txns|length }} transformation{{ 's' if txns|length != 1 else '' }}</div>
+      <div class="win-status-cell">{{ capture._date_pretty }}</div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

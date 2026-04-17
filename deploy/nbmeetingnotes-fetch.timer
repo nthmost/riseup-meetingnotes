@@ -1,0 +1,10 @@
+[Unit]
+Description=NBMeetingNotes — weekly pad fetch (Wednesday 11:00 UTC ≈ 4am PDT)
+
+[Timer]
+# Wednesday at 11:00 UTC = ~4am PDT (UTC-7) / 3am PST (UTC-8)
+OnCalendar=Wed *-*-* 11:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

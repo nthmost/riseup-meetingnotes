@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}NB Meeting Notes{% endblock %}</title>
+  <link rel="stylesheet" href="/static/win311.css">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+
+{% if template_alert %}
+<div id="template-warning-bar"
+     style="position:fixed;bottom:0;left:0;right:0;z-index:900;
+            background:#cc4400;color:#fff;padding:6px 12px;
+            font-family:monospace;font-size:11px;display:flex;
+            align-items:center;gap:10px;cursor:pointer;"
+     onclick="document.getElementById('template-warning-modal').style.display='flex'">
+  <span style="font-weight:bold;">⚠ WARNING</span>
+  <span>The meeting notes template has changed since this pipeline was configured. Transforms may not work correctly. Click for details.</span>
+</div>
+
+<div id="template-warning-modal"
+     style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,0.6);z-index:1100;align-items:center;justify-content:center;">
+  <div style="background:#fff;border:2px solid #cc4400;width:520px;max-width:95vw;font-family:monospace;">
+    <div style="background:#cc4400;color:#fff;padding:5px 10px;display:flex;align-items:center;gap:8px;">
+      <span style="font-weight:bold;">⚠ Template Version Mismatch</span>
+      <button onclick="document.getElementById('template-warning-modal').style.display='none'"
+              style="margin-left:auto;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:14px;font-size:12px;line-height:1.6;">
+      <p>The <strong>meeting notes template</strong> on the wiki has changed since the pipeline's artifact-removal rules were last verified.</p>
+      <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+        <tr>
+          <td style="padding:4px 8px;background:#f5f5f5;font-weight:bold;">Baseline revision</td>
+          <td style="padding:4px 8px;">{{ template_alert.baseline_revid or 'unknown' }}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 8px;background:#f5f5f5;font-weight:bold;">Current revision</td>
+          <td style="padding:4px 8px;color:#cc4400;font-weight:bold;">{{ template_alert.new_revid }}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 8px;background:#f5f5f5;font-weight:bold;">Detected</td>
+          <td style="padding:4px 8px;">{{ template_alert.new_fetched_at[:16].replace('T',' ') }} UTC</td>
+        </tr>
+      </table>
+      <p style="color:#884400;">Review <code>noisebridge_pipeline/transforms.py</code> against the new template to confirm artifact-removal rules are still accurate.</p>
+      <p><a href="{{ config.WIKI_PAGE_URL }}/{{ config.WIKI_TEMPLATE_TITLE.replace(' ','_') }}" target="_blank" style="color:#0000cc;">View current template on wiki ↗</a></p>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="document.getElementById('template-warning-modal').style.display='none'"
+                style="padding:4px 14px;cursor:pointer;">Later</button>
+        {% if current_user %}
+        <form method="post" action="/acknowledge-template-change" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  style="padding:4px 14px;background:#cc4400;color:#fff;border:none;cursor:pointer;font-weight:bold;">
+            I've reviewed this — acknowledge
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div style="text-align:center; padding:6px {% if template_alert %}30px{% endif %}; font-size:10px; color:#808080; font-family:monospace;">
+  <a href="https://github.com/nthmost/riseup-meetingnotes" target="_blank" style="color:#808080;">github.com/nthmost/riseup-meetingnotes</a>
+</div>
+</body>
+</html>

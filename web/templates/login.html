@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Login — NB Meeting Notes{% endblock %}
+
+{% block head %}
+<style>
+  body { display:flex; align-items:center; justify-content:center; }
+  .dialog {
+    width: 320px;
+  }
+  .dialog-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .win-input {
+    border: 2px solid;
+    border-color: #808080 #dfdfdf #dfdfdf #808080;
+    background: #fff;
+    padding: 2px 4px;
+    font-family: "MS Sans Serif", Arial, sans-serif;
+    font-size: 11px;
+    width: 100%;
+  }
+  .win-label {
+    font-size: 11px;
+  }
+  .error-box {
+    background: #fff0f0;
+    border: 1px solid #c00;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #c00;
+  }
+  .btn-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .hint {
+    font-size: 10px;
+    color: #808080;
+    line-height: 1.5;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="win-window dialog">
+  <div class="win-titlebar">
+    <span class="title-icon">🔐</span>
+    <span class="title-text">Login — Noisebridge Wiki</span>
+    <div class="win-controls">
+      <div class="win-ctrl-btn">✕</div>
+    </div>
+  </div>
+
+  <div class="dialog-body">
+    <p class="hint">
+      Sign in with your <strong>Noisebridge wiki</strong> username and password
+      to submit quality ratings.
+    </p>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="form-row">
+        <label class="win-label" for="username">Wiki username:</label>
+        <input class="win-input" type="text" id="username" name="username"
+               autofocus autocomplete="username">
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <label class="win-label" for="password">Password:</label>
+        <input class="win-input" type="password" id="password" name="password"
+               autocomplete="current-password">
+      </div>
+      <div class="btn-row">
+        <a href="/"><button type="button" class="win-btn">Cancel</button></a>
+        <button type="submit" class="win-btn" style="font-weight:bold;">OK</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

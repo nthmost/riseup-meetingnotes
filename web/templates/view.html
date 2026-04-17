@@ -1,0 +1,836 @@
+{% extends "base.html" %}
+{% block title %}{{ capture._date_pretty }} — NB Archive{% endblock %}
+{% block head %}
+<style>
+  body { padding: 0; }
+  .outer {
+    height: calc(100vh - 40px);
+    margin: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .panes-row {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 4px;
+  }
+  .pane-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .pane-wrap .win-window {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .pane-scroll { flex:1; overflow:auto; min-height:0; background:#fff; }
+  .wiki-pane-body {
+    flex:1; min-height:0; display:flex; flex-direction:column; position:relative;
+  }
+
+  /* ── Rating panel ── */
+  .rating-bar {
+    background: #c0c0c0;
+    border-top: 1px solid #808080;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .rating-label { font-size: 11px; font-weight: bold; }
+  .thumb-btn {
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #dfdfdf #808080 #808080 #dfdfdf;
+    font-size: 16px;
+    width: 32px; height: 28px;
+    display: flex; align-items:center; justify-content:center;
+    cursor: pointer;
+  }
+  .thumb-btn:active, .thumb-btn.selected {
+    border-color: #808080 #dfdfdf #dfdfdf #808080;
+    background: #b8b4ac;
+  }
+  .thumb-btn.selected-up   { background: #d0ffd0; }
+  .thumb-btn.selected-down { background: #ffd0d0; }
+
+  /* ── Thumbs-down form ── */
+  #down-form {
+    display: none;
+    background: #c0c0c0;
+    border-top: 2px solid #808080;
+    padding: 10px 12px;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #down-form.visible { display: flex; }
+  .issue-checks { display:flex; gap:12px; flex-wrap:wrap; }
+  .issue-checks label { display:flex; align-items:center; gap:4px; font-size:11px; cursor:pointer; }
+  .win-textarea {
+    border: 2px solid;
+    border-color: #808080 #dfdfdf #dfdfdf #808080;
+    background: #fff;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    padding: 4px;
+    resize: vertical;
+    width: 100%;
+  }
+  .form-section-label { font-size:11px; font-weight:bold; margin-bottom:2px; }
+  .form-row-2 { display:flex; gap:10px; }
+  .form-row-2 > div { flex:1; display:flex; flex-direction:column; }
+
+  .login-prompt { font-size:11px; color:#808080; }
+  .login-prompt a { color:#000080; }
+
+  /* ── Win 3.11 modal ── */
+  .win-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.25);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  .win-overlay.visible { display: flex; }
+  .win-dialog {
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #fff #808080 #808080 #fff;
+    box-shadow: 3px 3px 0 #000;
+    width: 340px;
+    animation: popIn 0.08s ease-out;
+  }
+  @keyframes popIn {
+    from { transform: scale(0.92); opacity: 0.5; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+  .win-dialog-body {
+    padding: 16px 20px 12px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .win-dialog-icon {
+    font-size: 32px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .win-dialog-text {
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .win-dialog-text strong { display: block; margin-bottom: 4px; font-size: 12px; }
+  .win-dialog-buttons {
+    padding: 8px 20px 14px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+  .win-dialog-buttons .win-btn {
+    min-width: 80px;
+    font-weight: bold;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="outer">
+
+  <!-- Top toolbar -->
+  <div class="win-window" style="flex-shrink:0;">
+    <div class="win-titlebar">
+      <span class="title-icon">📂</span>
+      <span class="title-text">
+        {{ capture._date_pretty }}
+        {% if txn %}
+        <span style="font-weight:normal; opacity:0.8; font-size:10px;">
+          &nbsp;·&nbsp; pass {{ all_txns|length }}
+          &nbsp;·&nbsp; {{ txn._run_at_pretty }}
+          {% if txn.pipeline_version != 'unknown' %}&nbsp;·&nbsp; git:{{ txn.pipeline_version }}{% endif %}
+          {% if txn.model_name %}&nbsp;·&nbsp; {{ txn.model_name }}{% endif %}
+          {% if txn.duration_seconds %}&nbsp;·&nbsp; {{ '%.1f'|format(txn.duration_seconds) }}s{% endif %}
+        </span>
+        {% endif %}
+      </span>
+      <div class="win-controls">
+        {% if current_user %}
+          <span style="font-size:10px; opacity:0.9; padding-right:6px;">{{ current_user }}</span>
+          <a href="/logout" style="color:#fff; font-size:10px;">logout</a>
+        {% else %}
+          <a href="/login" style="color:#fff; font-size:10px;">login</a>
+        {% endif %}
+        &nbsp;
+        <div class="win-ctrl-btn">_</div>
+        <div class="win-ctrl-btn">□</div>
+        <div class="win-ctrl-btn">✕</div>
+      </div>
+    </div>
+    <div class="win-toolbar">
+      <a href="/"><button class="win-btn">◀ Back</button></a>
+      <a href="/raw/{{ capture.meeting_date }}"><button class="win-btn">📄 Raw TXT</button></a>
+      <a href="/history/{{ capture.meeting_date }}"><button class="win-btn">📋 History ({{ all_txns|length }})</button></a>
+      <div class="win-toolbar-sep"></div>
+      {% if all_txns|length > 1 %}
+        {% for t in all_txns %}
+          <a href="/view/{{ capture.meeting_date }}?txn={{ t.id }}">
+            <button class="win-btn {% if txn and t.id == txn.id %}active{% endif %}">
+              Pass {{ loop.index }}
+            </button>
+          </a>
+        {% endfor %}
+        <div class="win-toolbar-sep"></div>
+      {% endif %}
+      <a id="link-open" href="{{ wiki_net }}" target="_blank"><button class="win-btn">↗ Open in Tab</button></a>
+
+      {% if current_user %}
+        <div class="win-toolbar-sep"></div>
+        {% if job and job.status in ('pending', 'running') %}
+          <button class="win-btn" disabled style="font-style:italic; color:#808080; padding:3px 14px;">
+            ⏳ Working…
+          </button>
+        {% elif not txn or not txn._output_exists %}
+          {# ── State 1: not yet processed ── #}
+          <form method="post" action="/detect-published/{{ capture.id }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn" title="Check if notes are already on the wiki">
+              🔍 Check Wiki
+            </button>
+          </form>
+          <form method="post" action="/process/{{ capture.id }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn"
+                    style="font-weight:bold; font-size:12px; background:#c8e8ff; padding:3px 14px;">
+              ▶ Run Pipeline
+            </button>
+          </form>
+        {% elif txn._output_exists %}
+          {# ── State 2+: processed ── #}
+
+          {# Always available: re-run and summary generation #}
+          <form method="post" action="/rerun/{{ txn.id }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn" style="padding:3px 10px;">
+              ↻ Re-run Pipeline
+            </button>
+          </form>
+          <form method="post" action="/generate-summary/{{ txn.id }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn" style="padding:3px 10px; background:#fff8e0;">
+              {% if txn._generated_summary %}↻ Regenerate Summary{% else %}✨ Generate Summary{% endif %}
+            </button>
+          </form>
+
+          <div class="win-toolbar-sep"></div>
+
+          {# Publish workflow #}
+          {% if not txn._is_preview_published %}
+            <form method="post" action="/publish-preview/{{ txn.id }}" style="display:inline;"
+                  onsubmit="return confirm('Publish draft to {{ preview_title }}?')">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="win-btn"
+                      style="font-weight:bold; background:#ddeeff; padding:3px 12px;">
+                📋 Publish Preview
+              </button>
+            </form>
+          {% else %}
+            <a href="{{ preview_url }}" target="_blank">
+              <button class="win-btn" style="color:#008000; font-weight:bold;">
+                ✓ Preview ↗
+              </button>
+            </a>
+          {% endif %}
+
+          {% if not txn._is_final_published %}
+            {% if capture._locked %}
+              <form method="post" action="/toggle-lock/{{ capture.id }}" style="display:inline;"
+                    onsubmit="return confirm('These wiki notes have already been edited {{ capture._wiki_revisions or \"an unknown number of\" }} time{{ \"s\" if (capture._wiki_revisions or 0) != 1 else \"\" }}.\n\nPublishing will overwrite those changes. Are you sure you want to unlock?')">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="win-btn"
+                        style="font-size:10px; padding:2px 8px; color:#884400;">
+                  🔒 {{ capture._wiki_revisions or '?' }} wiki edits — Unlock to publish
+                </button>
+              </form>
+            {% else %}
+              {% if capture._wiki_revisions %}
+                <form method="post" action="/toggle-lock/{{ capture.id }}" style="display:inline;">
+                                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="win-btn"
+                          style="font-size:10px; padding:2px 8px; color:#808080;">
+                    🔓 Lock
+                  </button>
+                </form>
+              {% endif %}
+              <form method="post" action="/publish/{{ txn.id }}" style="display:inline;"
+                    onsubmit="return confirm('Publish to the official Meeting_Notes page on noisebridge.net?')">
+                              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="win-btn"
+                        style="font-weight:bold; font-size:12px; background:#aaffaa; padding:3px 14px;">
+                  🌐 Publish Meeting Notes
+                </button>
+              </form>
+            {% endif %}
+          {% else %}
+            <button class="win-btn" disabled style="color:#808080;">
+              ✓ Published
+            </button>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if job %}
+  <!-- Pipeline job status banner -->
+  <div class="win-window" id="job-banner" style="flex-shrink:0;{% if job.status == 'error' %} background:#ffd0d0;{% endif %}">
+    <div class="win-titlebar">
+      <span class="title-icon">{{ '❌' if job.status == 'error' else '⏳' }}</span>
+      <span class="title-text">
+        {% if job.status == 'error' %}Error
+        {% elif job.status == 'running' %}
+          {%- if job.flags and 'publish' in job.flags %}Publishing…
+          {%- elif job.flags and 'generate_summary' in job.flags %}Generating Summary…
+          {%- else %}Pipeline Running…{% endif %}
+        {% else %}Queued{% endif %}
+      </span>
+    </div>
+    <div style="padding:5px 10px; font-size:11px;">
+      {% if job.status == 'error' %}
+        <strong>Error:</strong> {{ job.error or 'Unknown error' }}
+      {% else %}
+        Processing meeting notes… this takes about 10–15 seconds.
+        <span id="job-dots">.</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Split panes -->
+  <div class="panes-row">
+
+    <!-- Left: raw / processed toggle -->
+    <div class="pane-wrap">
+      <div class="win-window">
+        <div class="win-titlebar">
+          <span class="title-icon" id="left-icon">📝</span>
+          <span class="title-text" id="left-title">raw_{{ capture.meeting_date }}.txt — Riseup Pad original</span>
+          <div class="win-controls"><div class="win-ctrl-btn">_</div></div>
+        </div>
+        <!-- Tab strip -->
+        <div style="background:#c0c0c0; border-bottom:1px solid #808080; padding:3px 4px; display:flex; gap:2px; flex-shrink:0;">
+          <button class="win-btn active" id="tab-raw"
+                  onclick="showPane('raw')">📝 Raw pad</button>
+          <button class="win-btn {% if not output_content %}disabled{% endif %}"
+                  id="tab-processed"
+                  onclick="showPane('processed')"
+                  {% if not output_content %}disabled title="No processed output for this pass"{% endif %}>
+            📄 Pass {{ all_txns|length if txn else '—' }}{% if txn and txn.model_name %} (AI){% endif %}
+          </button>
+        </div>
+        <div class="pane-scroll" id="pane-raw">
+          {% if raw_content %}
+            <pre class="raw-pre">{{ raw_content }}</pre>
+          {% else %}
+            <div style="padding:40px; text-align:center; color:#808080;">Raw file not on this host.</div>
+          {% endif %}
+        </div>
+        <div class="pane-scroll" id="pane-processed" style="display:none;">
+          {% if output_content %}
+            <pre class="raw-pre">{{ output_content }}</pre>
+          {% else %}
+            <div style="padding:40px; text-align:center; color:#808080;">
+              No processed output available for this pass.
+            </div>
+          {% endif %}
+        </div>
+        <div class="win-statusbar">
+          <div class="win-status-cell wide" id="left-status">{{ capture.source_url }}</div>
+          <div class="win-status-cell">{{ capture._size_pretty }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: wiki iframe -->
+    <div class="pane-wrap">
+      <div class="win-window">
+        <div class="win-titlebar">
+          <span class="title-icon">🌐</span>
+          <span class="title-text" id="wiki-title">wiki: Meeting_Notes_{{ capture.meeting_date }}</span>
+          {% if txn and txn.preview_published_to and not txn._is_final_published %}
+          <span style="background:#cc6600;color:#fff;font-size:10px;
+                       padding:1px 7px;margin-left:6px;letter-spacing:0.05em;">PREVIEW ONLY</span>
+          {% endif %}
+          <div class="win-controls"><div class="win-ctrl-btn">_</div></div>
+        </div>
+        <div class="wiki-pane-body">
+          <iframe id="wiki-iframe" class="wiki-iframe"
+            src="{{ preview_url if (txn and txn.preview_published_to and not txn._is_final_published) else wiki_net }}"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox">
+          </iframe>
+          <div id="iframe-notice" style="
+            display:none; position:absolute; bottom:8px; left:50%;
+            transform:translateX(-50%); background:#ffffc0;
+            border:1px solid #808080; padding:6px 12px;
+            font-size:11px; white-space:nowrap;">
+            Not loading? Try
+            <a href="#" onclick="switchWiki('eu');return false;">noisebridge.eu</a> or
+            <a id="fallback-link" href="{{ wiki_eu }}" target="_blank">open in tab ↗</a>
+          </div>
+        </div>
+        <div class="win-statusbar">
+          <div class="win-status-cell wide" id="wiki-url-bar">{{ wiki_net }}</div>
+          <div class="win-status-cell" id="wiki-status">Loading…</div>
+          <div class="win-status-cell" style="padding:0;">
+            <button id="flag-us" onclick="switchWiki('net')" title="noisebridge.net (US)"
+              style="background:none; border:none; font-size:16px; padding:1px 6px; cursor:pointer; opacity:1;">🇺🇸</button>
+            <button id="flag-ie" onclick="switchWiki('eu')"  title="noisebridge.eu (Ireland)"
+              style="background:none; border:none; font-size:16px; padding:1px 6px; cursor:pointer; opacity:0.4;">🇮🇪</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panes-row -->
+
+  <!-- Rating panel (id=rating for anchor) -->
+  <div class="win-window" id="rating" style="flex-shrink:0;">
+    <div class="win-titlebar">
+      <span class="title-icon">⭐</span>
+      <span class="title-text">Quality Rating{% if txn %} — Pass {{ all_txns|length }}{% endif %}</span>
+    </div>
+
+    {% if not txn %}
+      <div class="rating-bar"><span class="muted">No transformation yet for this meeting.</span></div>
+
+    {% elif not current_user %}
+      <div class="rating-bar">
+        <span class="login-prompt">
+          <a href="/login?next={{ request.url }}">Log in with your NB wiki account</a>
+          to submit a quality rating.
+        </span>
+      </div>
+
+    {% else %}
+      <div class="rating-bar">
+        <span class="rating-label">Rate this output:</span>
+        <button class="thumb-btn {% if user_rating and user_rating.rating == 'up' %}selected-up{% endif %}"
+                id="btn-up" onclick="selectRating('up')" title="Looks good">👍</button>
+        <button class="thumb-btn {% if user_rating and user_rating.rating == 'down' %}selected-down{% endif %}"
+                id="btn-down" onclick="selectRating('down')" title="Has issues">👎</button>
+        {% if user_rating %}
+          <span style="font-size:10px; color:#808080;">
+            Your rating: <strong>{{ '👍' if user_rating.rating == 'up' else '👎' }}</strong>
+            — click to change
+          </span>
+        {% endif %}
+      </div>
+
+      <!-- Thumbs-down detail form -->
+      <div id="down-form" class="{% if user_rating and user_rating.rating == 'down' %}visible{% endif %}">
+        <form method="post" action="/rate/{{ txn.id }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="rating" id="rating-input"
+                 value="{{ user_rating.rating if user_rating else '' }}">
+
+          <div>
+            <div class="form-section-label">What kind of issue? (check all that apply)</div>
+            <div class="issue-checks">
+              {% for key, label in issue_labels.items() %}
+              <label>
+                <input type="checkbox" name="issues" value="{{ key }}"
+                  {% if user_rating and key in (user_rating.issues or []) %}checked{% endif %}>
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div>
+              <div class="form-section-label">Paste the problem section:</div>
+              <textarea class="win-textarea" name="problem_excerpt" rows="4"
+                        placeholder="Paste the part that came out wrong…">{{ user_rating.problem_excerpt if user_rating else '' }}</textarea>
+            </div>
+            <div>
+              <div class="form-section-label">What should it look like?</div>
+              <textarea class="win-textarea" name="problem_description" rows="4"
+                        placeholder="Describe what the correct output should be…">{{ user_rating.problem_description if user_rating else '' }}</textarea>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="submit" class="win-btn" style="font-weight:bold;">Submit Rating</button>
+            <button type="button" class="win-btn" onclick="cancelDown()">Cancel</button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+
+  </div><!-- /rating panel -->
+
+</div><!-- /outer -->
+
+<!-- Win 3.11 pad-update notification modal -->
+<div class="win-overlay" id="pad-update-modal">
+  <div class="win-dialog">
+    <div class="win-titlebar">
+      <span class="title-icon">📝</span>
+      <span class="title-text">Pad Updated</span>
+      <div class="win-controls">
+        <div class="win-ctrl-btn" onclick="dismissPadUpdate()">✕</div>
+      </div>
+    </div>
+    <div class="win-dialog-body">
+      <div class="win-dialog-icon">🔄</div>
+      <div class="win-dialog-text">
+        <strong>The Riseup Pad has been updated.</strong>
+        The pad content has changed since this meeting was archived.
+        Do you want to update the stored raw text?
+      </div>
+    </div>
+    <div class="win-dialog-buttons">
+      {% if current_user %}
+        <button class="win-btn" id="pad-refresh-btn" onclick="doRawRefresh()">Update</button>
+      {% else %}
+        <a href="/login?next={{ request.url }}"><button class="win-btn">Log in to update</button></a>
+      {% endif %}
+      <button class="win-btn" onclick="dismissPadUpdate()">Dismiss</button>
+      <span id="pad-refresh-status" style="font-size:10px; color:#808080; margin-left:4px;"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Win 3.11 publish confirmation modal -->
+{% if request.args.get('published') %}
+<div class="win-overlay visible" id="publish-modal">
+  <div class="win-dialog">
+    <div class="win-titlebar">
+      <span class="title-icon">🌐</span>
+      <span class="title-text">Published!</span>
+      <div class="win-controls">
+        <div class="win-ctrl-btn" onclick="document.getElementById('publish-modal').classList.remove('visible')">✕</div>
+      </div>
+    </div>
+    <div class="win-dialog-body">
+      <div class="win-dialog-icon">✅</div>
+      <div class="win-dialog-text">
+        <strong>Wiki updated successfully.</strong>
+        The processed notes have been published to
+        <a href="{{ wiki_net }}" target="_blank">noisebridge.net</a>.
+        It may take a moment to appear.
+      </div>
+    </div>
+    <div class="win-dialog-buttons">
+      <a href="{{ wiki_net }}" target="_blank"><button class="win-btn">Open Wiki ↗</button></a>
+      <button class="win-btn" onclick="document.getElementById('publish-modal').classList.remove('visible')">OK</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Win 3.11 rating confirmation modal -->
+{% set rated = request.args.get('rated') %}
+<div class="win-overlay{% if rated %} visible{% endif %}" id="rating-modal">
+  <div class="win-dialog">
+    <div class="win-titlebar">
+      <span class="title-icon">{{ '👍' if rated == 'up' else '👎' }}</span>
+      <span class="title-text">Rating Submitted</span>
+      <div class="win-controls">
+        <div class="win-ctrl-btn" onclick="closeRatingModal()">✕</div>
+      </div>
+    </div>
+    <div class="win-dialog-body">
+      <div class="win-dialog-icon">{{ '✅' if rated == 'up' else '📋' }}</div>
+      <div class="win-dialog-text">
+        {% if rated == 'up' %}
+          <strong>Looks great!</strong>
+          Your thumbs-up has been recorded.
+        {% else %}
+          <strong>Feedback received!</strong>
+          Your notes and issue tags have been saved.<br>
+          To trigger a re-run with a fresh pipeline pass,
+          visit the <a href="/history/{{ capture.meeting_date }}">History page</a>.
+        {% endif %}
+      </div>
+    </div>
+    <div class="win-dialog-buttons">
+      <button class="win-btn" onclick="closeRatingModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CSRF_TOKEN  = document.querySelector('meta[name="csrf-token"]').content;
+  const PREVIEW_URL = {{ preview_url|tojson if preview_url else 'null' }};
+  const IS_PREVIEW  = {{ ('true' if (txn and txn.preview_published_to and not txn._is_final_published) else 'false') }};
+  const URLS = { net: {{ wiki_net|tojson }}, eu: {{ wiki_eu|tojson }} };
+  const STORAGE_KEY = 'nb_wiki_mirror';
+  let current = IS_PREVIEW ? 'preview' : (localStorage.getItem(STORAGE_KEY) || 'net');
+  let loadTimer = null;
+
+  const iframe   = document.getElementById('wiki-iframe');
+  const flagUS   = document.getElementById('flag-us');
+  const flagIE   = document.getElementById('flag-ie');
+  const linkOpen = document.getElementById('link-open');
+  const urlBar   = document.getElementById('wiki-url-bar');
+  const statusEl = document.getElementById('wiki-status');
+  const notice   = document.getElementById('iframe-notice');
+
+  function currentUrl() {
+    if (current === 'preview' && PREVIEW_URL) return PREVIEW_URL;
+    return URLS[current] || URLS['net'];
+  }
+
+  function updateFlagUI() {
+    flagUS.style.opacity = (current !== 'eu') ? '1'   : '0.35';
+    flagIE.style.opacity = (current === 'eu') ? '1'   : '0.35';
+    flagUS.style.filter  = (current !== 'eu') ? 'none': 'grayscale(0.3)';
+    flagIE.style.filter  = (current === 'eu') ? 'none': 'grayscale(0.3)';
+    flagUS.title = IS_PREVIEW ? 'Preview page (noisebridge.net)' : 'noisebridge.net (US)';
+    linkOpen.href = currentUrl();
+    urlBar.textContent = currentUrl();
+    const fallback = document.getElementById('fallback-link');
+    if (fallback) fallback.href = URLS['eu'];
+  }
+
+  function switchWiki(which) {
+    // When in preview mode, US flag stays on preview; IE flag switches to live EU
+    if (which === 'net' && IS_PREVIEW && PREVIEW_URL) {
+      current = 'preview';
+    } else {
+      current = which;
+      if (!IS_PREVIEW) localStorage.setItem(STORAGE_KEY, which);
+    }
+    iframe.src = currentUrl();
+    statusEl.textContent = 'Loading…';
+    notice.style.display = 'none';
+    updateFlagUI();
+    resetTimer();
+  }
+
+  function resetTimer() {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => {
+      notice.style.display = 'block';
+      statusEl.textContent = 'Not responding';
+    }, 8000);
+  }
+
+  iframe.addEventListener('load',  () => { clearTimeout(loadTimer); statusEl.textContent = 'Done'; notice.style.display = 'none'; });
+  iframe.addEventListener('error', () => { clearTimeout(loadTimer); notice.style.display = 'block'; statusEl.textContent = 'Error'; });
+
+  // Apply saved preference on load
+  updateFlagUI();
+  if (!IS_PREVIEW && current !== 'net') iframe.src = URLS[current];
+  resetTimer();
+
+  // ── Left pane toggle ──
+  function showPane(which) {
+    const isRaw = which === 'raw';
+    document.getElementById('pane-raw').style.display       = isRaw ? '' : 'none';
+    document.getElementById('pane-processed').style.display = isRaw ? 'none' : '';
+    document.getElementById('tab-raw').classList.toggle('active', isRaw);
+    document.getElementById('tab-processed').classList.toggle('active', !isRaw);
+    document.getElementById('left-icon').textContent  = isRaw ? '📝' : '📄';
+    document.getElementById('left-title').textContent = isRaw
+      ? 'raw_{{ capture.meeting_date }}.txt — Riseup Pad original'
+      : 'Meeting_Notes_{{ capture.meeting_date }}_pass{{ all_txns|length }}.wiki — processed output';
+    document.getElementById('left-status').textContent = isRaw
+      ? {{ capture.source_url|tojson }}
+      : {{ (txn.output_path if txn and txn.output_path else '')|tojson }};
+  }
+
+  // ── Auto-switch to processed pane after a pipeline run ──
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const processedTab = document.getElementById('tab-processed');
+    if (params.get('txn') && processedTab && !processedTab.disabled) {
+      showPane('processed');
+    }
+  })();
+
+  // ── Rating modal ──
+  function closeRatingModal() {
+    document.getElementById('rating-modal').classList.remove('visible');
+    // Collapse the thumbs-down form now that we've confirmed
+    const downForm = document.getElementById('down-form');
+    if (downForm) downForm.classList.remove('visible');
+  }
+  // Close on overlay click
+  document.getElementById('rating-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeRatingModal();
+  });
+
+  // ── Rating UI ──
+  function selectRating(which) {
+    const upBtn   = document.getElementById('btn-up');
+    const downBtn = document.getElementById('btn-down');
+    const input   = document.getElementById('rating-input');
+    const form    = document.getElementById('down-form');
+
+    upBtn.classList.remove('selected-up');
+    downBtn.classList.remove('selected-down');
+
+    if (which === 'up') {
+      upBtn.classList.add('selected-up');
+      input.value = 'up';
+      form.classList.remove('visible');
+      // Auto-submit thumbs up
+      input.closest('form') || submitRating('up');
+      submitRating('up');
+    } else {
+      downBtn.classList.add('selected-down');
+      input.value = 'down';
+      form.classList.add('visible');
+      form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function cancelDown() {
+    document.getElementById('down-form').classList.remove('visible');
+    document.getElementById('btn-down').classList.remove('selected-down');
+    document.getElementById('rating-input').value = '';
+  }
+
+  function submitRating(rating) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/rate/{{ txn.id if txn else 0 }}';
+    const input = document.createElement('input');
+    input.type = 'hidden'; input.name = 'rating'; input.value = rating;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  // ── Pad-update check ──
+  function dismissPadUpdate() {
+    document.getElementById('pad-update-modal').classList.remove('visible');
+  }
+
+  async function doRawRefresh() {
+    const btn    = document.getElementById('pad-refresh-btn');
+    const status = document.getElementById('pad-refresh-status');
+    btn.disabled = true;
+    btn.textContent = 'Updating…';
+    try {
+      const resp = await fetch('/api/refresh-raw/{{ capture.meeting_date }}',
+                              {method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}});
+      const data = await resp.json();
+      if (data.error) {
+        status.textContent = 'Error: ' + data.error;
+        btn.disabled = false;
+        btn.textContent = 'Update';
+        return;
+      }
+      // Poll the background job until done
+      const jobId = data.job_id;
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch('/api/job-status/' + jobId);
+          const j = await r.json();
+          if (j.status === 'done')  { clearInterval(poll); window.location.reload(); }
+          if (j.status === 'error') {
+            clearInterval(poll);
+            status.textContent = 'Error: ' + (j.error || 'unknown');
+            btn.disabled = false; btn.textContent = 'Update';
+          }
+        } catch (_) {}
+      }, 1500);
+    } catch (_) {
+      status.textContent = 'Network error';
+      btn.disabled = false;
+      btn.textContent = 'Update';
+    }
+  }
+
+  async function checkPadUpdate() {
+    try {
+      const resp = await fetch('/api/check-update/{{ capture.meeting_date }}');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.update_available) {
+        document.getElementById('pad-update-modal').classList.add('visible');
+      }
+    } catch (_) { /* silently fail */ }
+  }
+
+  window.addEventListener('load', checkPadUpdate);
+
+  {% if job and job.status in ('pending', 'running') %}
+  // ── Pipeline job poller ──
+  (function () {
+    const jobId   = {{ job.id }};
+    const dateStr = {{ capture.meeting_date|tojson }};
+    const dots    = document.getElementById('job-dots');
+    let dotCount  = 1;
+
+    const poll = setInterval(async function () {
+      dotCount = (dotCount % 3) + 1;
+      if (dots) dots.textContent = '.'.repeat(dotCount);
+      try {
+        const resp = await fetch('/api/job-status/' + jobId);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.status === 'done' && data.result_txn_id) {
+          clearInterval(poll);
+          window.location = '/view/' + dateStr + '?txn=' + data.result_txn_id;
+        } else if (data.status === 'error') {
+          clearInterval(poll);
+          window.location.reload();
+        }
+      } catch (_) {}
+    }, 2000);
+  })();
+  {% endif %}
+</script>
+
+{% if txn and txn._generated_summary and txn._output_exists and current_user %}
+<div id="summary-modal-backdrop"
+     style="position:fixed;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,0.55);z-index:1000;display:flex;
+            align-items:center;justify-content:center;">
+  <div style="background:#fff;border:2px solid #000080;width:680px;max-width:95vw;
+              max-height:90vh;display:flex;flex-direction:column;font-family:monospace;">
+    <div style="background:#000080;color:#fff;padding:4px 8px;display:flex;
+                align-items:center;gap:6px;flex-shrink:0;">
+      <span>✨</span>
+      <span style="font-size:12px;font-weight:bold;">AI-Generated Meeting Summary</span>
+      <span style="margin-left:auto;font-size:10px;color:#adf;">Review and edit, then click Add Summary</span>
+    </div>
+    <form method="post" action="/apply-summary/{{ txn.id }}"
+          style="display:flex;flex-direction:column;flex:1;min-height:0;padding:10px;gap:8px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="summary_text"
+                style="flex:1;min-height:300px;font-family:monospace;font-size:11px;
+                       border:1px inset #808080;padding:6px;resize:vertical;
+                       box-sizing:border-box;width:100%;"
+      >{{ txn._generated_summary }}</textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">
+        <button type="button" class="win-btn" style="padding:4px 18px;"
+                onclick="document.getElementById('summary-modal-backdrop').style.display='none';
+                         fetch('/dismiss-summary/{{ txn.id }}',
+                               {method:'POST', credentials:'same-origin',
+                                headers:{'X-CSRFToken': CSRF_TOKEN}});">
+          Cancel
+        </button>
+        <button type="submit" class="win-btn"
+                style="font-weight:bold;background:#aaffaa;padding:4px 18px;">
+          Add Summary
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
