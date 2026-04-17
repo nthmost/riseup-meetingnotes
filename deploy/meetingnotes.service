@@ -1,0 +1,21 @@
+[Unit]
+Description=Meeting Notes Archive
+After=network.target
+
+[Service]
+Type=simple
+User=nthmost
+WorkingDirectory=/opt/meetingnotes
+ExecStart=/opt/meetingnotes/venv/bin/gunicorn \
+    --bind 127.0.0.1:8237 \
+    --workers 2 \
+    --timeout 60 \
+    --access-logfile /var/log/meetingnotes/access.log \
+    --error-logfile  /var/log/meetingnotes/error.log \
+    web.app:app
+EnvironmentFile=/opt/meetingnotes/.env
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

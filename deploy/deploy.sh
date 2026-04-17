@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — push nbmeetingnotes to a remote server
+# deploy.sh — push meetingnotes to a remote server
 #
 # Customise HOST, REMOTE_DIR, and SERVICE for your deployment before use.
 #
@@ -10,9 +10,9 @@
 
 set -euo pipefail
 
-HOST="${NBARCHIVE_HOST:-zephyr}"
-REMOTE_DIR="${NBARCHIVE_REMOTE_DIR:-/opt/nbmeetingnotes}"
-SERVICE="${NBARCHIVE_SERVICE:-nbmeetingnotes}"
+HOST="${MEETINGNOTES_HOST:-zephyr}"
+REMOTE_DIR="${MEETINGNOTES_REMOTE_DIR:-/opt/meetingnotes}"
+SERVICE="${MEETINGNOTES_SERVICE:-meetingnotes}"
 LOCAL_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 
 log() { echo "▶ $*"; }
@@ -30,8 +30,8 @@ deploy() {
     ssh "$HOST" "$REMOTE_DIR/venv/bin/pip install -q -r $REMOTE_DIR/requirements.txt"
 
     log "Syncing systemd service file ..."
-    scp "$LOCAL_SRC/deploy/$SERVICE.service" "$HOST:/tmp/$SERVICE.service"
-    ssh "$HOST" "sudo cp /tmp/$SERVICE.service /etc/systemd/system/$SERVICE.service && sudo systemctl daemon-reload"
+    scp "$LOCAL_SRC/deploy/meetingnotes.service" "$HOST:/tmp/meetingnotes.service"
+    ssh "$HOST" "sudo cp /tmp/meetingnotes.service /etc/systemd/system/meetingnotes.service && sudo systemctl daemon-reload"
 
     log "Restarting $SERVICE ..."
     ssh "$HOST" "sudo systemctl restart $SERVICE"
@@ -45,12 +45,12 @@ setup() {
     ssh "$HOST" "
         sudo mkdir -p $REMOTE_DIR
         sudo chown nthmost:nthmost $REMOTE_DIR
-        sudo mkdir -p /var/www/nthmost.net/nbmeetingnotes
-        sudo chown nthmost:nthmost /var/www/nthmost.net/nbmeetingnotes
-        sudo mkdir -p /var/lib/nbmeetingnotes
-        sudo chown nthmost:nthmost /var/lib/nbmeetingnotes
-        sudo mkdir -p /var/log/nbmeetingnotes
-        sudo chown nthmost:nthmost /var/log/nbmeetingnotes
+        sudo mkdir -p /var/www/nthmost.net/meetingnotes
+        sudo chown nthmost:nthmost /var/www/nthmost.net/meetingnotes
+        sudo mkdir -p /var/lib/meetingnotes
+        sudo chown nthmost:nthmost /var/lib/meetingnotes
+        sudo mkdir -p /var/log/meetingnotes
+        sudo chown nthmost:nthmost /var/log/meetingnotes
     "
 
     log "Creating venv ..."
@@ -59,16 +59,16 @@ setup() {
     deploy
 
     log "Installing systemd service ..."
-    scp "$LOCAL_SRC/deploy/nbmeetingnotes.service" "$HOST:/tmp/nbmeetingnotes.service"
+    scp "$LOCAL_SRC/deploy/meetingnotes.service" "$HOST:/tmp/meetingnotes.service"
     ssh "$HOST" "
-        sudo cp /tmp/nbmeetingnotes.service /etc/systemd/system/nbmeetingnotes.service
+        sudo cp /tmp/meetingnotes.service /etc/systemd/system/meetingnotes.service
         sudo systemctl daemon-reload
-        sudo systemctl enable nbmeetingnotes
+        sudo systemctl enable meetingnotes
     "
 
     log ""
     log "Copy .env.example to $REMOTE_DIR/.env and fill in values, then:"
-    log "  ssh $HOST sudo systemctl start nbmeetingnotes"
+    log "  ssh $HOST sudo systemctl start meetingnotes"
 }
 
 case "${1:-deploy}" in

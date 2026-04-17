@@ -160,7 +160,7 @@
               <span>
                 {% if txn.source_wiki_revid %}
                   Wiki revision
-                  <a href="https://www.noisebridge.net/index.php?oldid={{ txn.source_wiki_revid }}"
+                  <a href="{{ config.WIKI_PAGE_URL }}/index.php?oldid={{ txn.source_wiki_revid }}"
                      target="_blank" class="monospace">{{ txn.source_wiki_revid }} ↗</a>
                   of <em>{{ txn.source_wiki_page }}</em>
                 {% elif txn.parent_id %}
@@ -176,7 +176,7 @@
             <div class="meta-row"><span class="meta-key">Published to:</span>
               <span>
                 {% if txn.published_to %}
-                  <a href="https://www.noisebridge.net/wiki/{{ txn.published_to }}" target="_blank">
+                  <a href="{{ config.WIKI_PAGE_URL }}/{{ txn.published_to }}" target="_blank">
                     {{ txn.published_to }} ↗
                   </a>
                   ({{ txn._published_at_pretty }})

@@ -7,7 +7,7 @@ METRICS: and TRACE: JSON lines to stderr so the pipeline runner can record
 provenance and step-level observability.
 
 Set NB_PIPELINE_DIR to override where process.py / ai.py are found.
-Default: noisebridge_pipeline/ in this repo (sibling of pipeline/).
+Default: org_pipeline/ in this repo (sibling of pipeline/).
 """
 import argparse
 import json
@@ -17,21 +17,21 @@ import sys
 import time
 from pathlib import Path
 
-# ── locate noisebridge_pipeline ────────────────────────────────────────────────
+# ── locate org_pipeline ────────────────────────────────────────────────
 
 def _find_pipeline_dir() -> Path:
     env = os.environ.get('NB_PIPELINE_DIR')
     if env:
         return Path(env)
     candidates = [
-        Path(__file__).parent.parent / 'noisebridge_pipeline',  # same repo (default)
-        Path('/opt/nbmeetingnotes/noisebridge_pipeline'),        # production deploy path
+        Path(__file__).parent.parent / 'org_pipeline',  # same repo (default)
+        Path('/opt/nbmeetingnotes/org_pipeline'),        # production deploy path
     ]
     for c in candidates:
         if (c / 'process.py').exists():
             return c
     raise FileNotFoundError(
-        "Cannot find noisebridge_pipeline/process.py. "
+        "Cannot find org_pipeline/process.py. "
         "Set NB_PIPELINE_DIR env var to its directory."
     )
 
@@ -65,7 +65,7 @@ except ImportError as e:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Noisebridge meeting notes processor (nbmeetingnotes adapter)'
+        description='Meeting notes processor adapter'
     )
     parser.add_argument('--date', required=True, help='YYYY_MM_DD')
     parser.add_argument('--input', '-i', required=True, help='Path to raw .txt file')

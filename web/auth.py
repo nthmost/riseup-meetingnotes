@@ -1,5 +1,5 @@
 """
-web/auth.py — authentication via the Noisebridge MediaWiki API.
+web/auth.py — authentication via the MediaWiki API.
 
 Users log in with their NB wiki username + password. We verify against
 the wiki API, then store the username in a signed Flask session cookie.

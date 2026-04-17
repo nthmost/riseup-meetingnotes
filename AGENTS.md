@@ -50,7 +50,7 @@ multi-step try block, that is a signal to split into smaller functions.
 Functions should do one thing. The test for this: can you test it in isolation
 with real inputs, a real (in-memory) DB, and no mocking framework?
 
-- Pure transforms (text in → text out) live in `noisebridge_pipeline/transforms.py`.
+- Pure transforms (text in → text out) live in `org_pipeline/transforms.py`.
   They import only `re`, `sys`, and `datetime`. Tests run in milliseconds.
 - DB access lives in `db.py`. Use `db.override_db(':memory:')` in tests.
 - Network I/O is isolated in `pipeline/fetch.py` and `wiki.py`.

@@ -3,66 +3,73 @@ config.py — all settings loaded from environment / .env file.
 Copy .env.example to .env and fill in values before running.
 """
 import os
+import warnings
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / '.env')
-load_dotenv(Path.home() / '.secrets/nbwiki.env', override=True)  # secrets win
+load_dotenv(Path.home() / '.secrets/meetingnotes.env', override=True)  # secrets win
+
+
+def _warn_if_missing(value: str, var: str, description: str) -> str:
+    if not value:
+        warnings.warn(
+            f"{var} is not set — {description} will not work. Set {var} in .env.",
+            stacklevel=3,
+        )
+    return value
+
 
 # Storage
-RAW_DIR  = Path(os.environ.get('NB_RAW_DIR',  '/var/lib/nbmeetingnotes/raw'))
-DB_PATH  = Path(os.environ.get('NB_DB_PATH',  '/var/lib/nbmeetingnotes/provenance.db'))
+RAW_DIR  = Path(os.environ.get('NB_RAW_DIR',  '/var/lib/meetingnotes/raw'))
+DB_PATH  = Path(os.environ.get('NB_DB_PATH',  '/var/lib/meetingnotes/provenance.db'))
 
 # Pad source — required; no default so the specific pad URL stays out of source
-_pad_url = os.environ.get('NB_PAD_URL', '')
-if not _pad_url:
-    import warnings
-    warnings.warn(
-        "NB_PAD_URL is not set — pad fetching will fail. "
-        "Set NB_PAD_URL in .env to your meeting notes pad export URL.",
-        stacklevel=2,
-    )
-PAD_URL = _pad_url
+PAD_URL = _warn_if_missing(
+    os.environ.get('NB_PAD_URL', ''), 'NB_PAD_URL', 'pad fetching',
+)
 
-# Wiki
-WIKI_API_URL  = os.environ.get('NB_WIKI_API_URL',  'https://www.noisebridge.net/api.php')
-WIKI_PAGE_URL = os.environ.get('NB_WIKI_PAGE_URL', 'https://www.noisebridge.net/wiki')
-WIKI_EU_URL   = os.environ.get('NB_WIKI_EU_URL',   'https://www.noisebridge.eu/wiki')
+# Wiki — required for publishing; warn if missing
+WIKI_API_URL  = _warn_if_missing(os.environ.get('NB_WIKI_API_URL', ''),  'NB_WIKI_API_URL',  'wiki API access')
+WIKI_PAGE_URL = os.environ.get('NB_WIKI_PAGE_URL', '')
+WIKI_EU_URL   = os.environ.get('NB_WIKI_EU_URL', '')   # optional mirror; leave blank to hide in UI
 
-# Wiki bot credentials (for publishing processed notes)
-WIKI_BOT_USER = os.environ.get('NOISEBRIDGE_WIKI_USER', '')
-WIKI_BOT_PASS = os.environ.get('NOISEBRIDGE_WIKI_PASSWORD', '')
+# Wiki bot credentials (for publishing)
+WIKI_BOT_USER = os.environ.get('WIKI_BOT_USER', '')
+WIKI_BOT_PASS = os.environ.get('WIKI_BOT_PASSWORD', '')
 
-# Preview publishes go here; final publishes go to Meeting_Notes_YYYY_MM_DD
+# Preview publish prefix
 WIKI_PREVIEW_PREFIX = os.environ.get('NB_WIKI_PREVIEW_PREFIX', 'User:Bot/Meeting_Notes_')
 
-# AI
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+# Organization name — used in UI labels and AI summary prompts
+ORG_NAME = os.environ.get('NB_ORG_NAME', '')
 
-# HTTP User-Agent for all outbound requests (wiki API, pad fetches).
-# Include a contact URL so wiki admins can identify the bot.
-USER_AGENT = os.environ.get('NB_USER_AGENT', 'NBArchive/1.0')
+# Wiki footer elements appended to every published page (leave blank to skip)
+WIKI_YEAR_BANNER = os.environ.get('NB_WIKI_YEAR_BANNER', '')  # e.g. {{meetings2026}}
+WIKI_CATEGORY    = os.environ.get('NB_WIKI_CATEGORY', '')     # e.g. Category:Meeting Notes
 
-# Meeting notes template page on the wiki. The pipeline's artifact-removal rules
-# in transforms.py were written against a specific version of this template.
-# If the template changes, the app will display a warning.
-WIKI_TEMPLATE_TITLE = os.environ.get(
-    'NB_WIKI_TEMPLATE_TITLE', 'Meeting Notes Template'
-)
+# Pattern for "Nth Meeting of <org>" link in wiki pages — used to resolve meeting
+# ordinals. Set to the phrase inside the link, e.g. "Meeting of YourOrg".
+# Leave blank to skip meeting-number resolution.
+WIKI_MEETING_NUM_PATTERN = os.environ.get('NB_WIKI_MEETING_NUM_PATTERN', '')
+
+# Meeting notes template page on the wiki; monitored for changes.
+# Leave blank to disable template-change warnings.
+WIKI_TEMPLATE_TITLE = os.environ.get('NB_WIKI_TEMPLATE_TITLE', '')
+
+# HTTP User-Agent for all outbound requests
+USER_AGENT = os.environ.get('NB_USER_AGENT', 'MeetingNotesBot/1.0')
 
 # Web app
 SECRET_KEY = os.environ.get('NB_SECRET_KEY', 'change-me-in-production')
 if SECRET_KEY == 'change-me-in-production':
-    import warnings
     warnings.warn(
         "NB_SECRET_KEY is not set — using insecure default. "
         "Set NB_SECRET_KEY in .env before running in production.",
         stacklevel=2,
     )
 
-# Processor: path to the Python script that transforms raw → wiki text.
-# Script must accept --date YYYY_MM_DD --input <path> and write result to stdout.
-# Metrics may optionally be emitted as a JSON line to stderr prefixed "METRICS:".
+# Processor: path to the script that transforms raw → wiki text.
 PROCESSOR_SCRIPT = Path(
     os.environ.get('NB_PROCESSOR_SCRIPT',
                    Path(__file__).parent / 'pipeline' / 'process.py')

@@ -28,7 +28,7 @@ from ai import generate_summary
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Process raw Noisebridge Riseup Pad notes into clean wiki format',
+        description='Process raw Riseup Pad meeting notes into clean wiki format',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

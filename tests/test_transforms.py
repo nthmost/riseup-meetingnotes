@@ -1,5 +1,5 @@
 """
-Unit tests for noisebridge_pipeline/transforms.py.
+Unit tests for org_pipeline/transforms.py.
 
 These run in milliseconds — no network, no AI, no subprocess.
 """

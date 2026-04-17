@@ -56,7 +56,7 @@ built upon rather than overwritten.
 ### Layers
 
 ```
-noisebridge_pipeline/
+org_pipeline/
   transforms.py             Pure text transforms — regex only, no I/O, no AI.
                             Every artifact rule, attribution pattern, and
                             list conversion lives here. Tested in isolation.
@@ -312,11 +312,11 @@ ssh yourserver tail -f /var/log/nbmeetingnotes/error.log
 ## Contributing
 
 The codebase enforces a hard boundary between AI and non-AI code:
-**only `noisebridge_pipeline/ai.py` imports `anthropic`** — verified by
+**only `org_pipeline/ai.py` imports `anthropic`** — verified by
 an architectural test in `tests/test_module_separation.py`.
 
 Adding a new text transform means adding a function to `transforms.py`,
-calling it in `process()` in `noisebridge_pipeline/process.py` via
+calling it in `process()` in `org_pipeline/process.py` via
 `_record()`, and writing a test in `tests/test_transforms.py`. No other
 files need to change.
 

@@ -1,5 +1,5 @@
 """
-noisebridge_pipeline/process.py — deterministic meeting notes pipeline.
+org_pipeline/process.py — deterministic meeting notes pipeline.
 
 Orchestrates all text transforms and optionally calls the AI summary
 module (ai.py). Contains no Anthropic imports — those live exclusively
@@ -32,14 +32,21 @@ from transforms import (
 
 def fetch_meeting_number(date_str: str) -> int | None:
     """
-    Derive this meeting's number by fetching the previous Tuesday's published
+    Derive this meeting's number by fetching the previous week's published
     wiki page and incrementing its meeting number by 1.
 
-    Returns None on any network or parse failure.
+    Requires NB_WIKI_MEETING_NUM_PATTERN to be set (e.g. "Meeting of Noisebridge").
+    Returns None on any network or parse failure, or if the pattern is not configured.
     """
     from datetime import datetime, timedelta
 
-    wiki_api_url = os.getenv('NB_WIKI_API_URL', 'https://www.noisebridge.net/api.php')
+    pattern = os.getenv('NB_WIKI_MEETING_NUM_PATTERN', '')
+    if not pattern:
+        return None
+
+    wiki_api_url = os.getenv('NB_WIKI_API_URL', '')
+    if not wiki_api_url:
+        return None
 
     y, mo, d = (int(x) for x in date_str.split('_'))
     prev_tuesday = datetime(y, mo, d) - timedelta(days=7)
@@ -54,7 +61,7 @@ def fetch_meeting_number(date_str: str) -> int | None:
         'format': 'json',
     }
     url = wiki_api_url + '?' + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={'User-Agent': os.getenv('NB_USER_AGENT', 'NBArchive/1.0')})
+    req = urllib.request.Request(url, headers={'User-Agent': os.getenv('NB_USER_AGENT', 'MeetingNotesBot/1.0')})
     with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read())
 
@@ -67,14 +74,13 @@ def fetch_meeting_number(date_str: str) -> int | None:
 
     revisions = page.get('revisions', [])
     if not revisions:
-        print(f"Warning: wiki page '{prev_title}' has no revisions; cannot derive meeting number.",
-              file=sys.stderr)
         return None
 
     rev = revisions[0]
     content = (rev.get('slots', {}).get('main', {}).get('*') or rev.get('*', ''))
 
-    m = re.search(r'The (\d+)(?:st|nd|rd|th) Meeting of Noisebridge', content)
+    escaped = re.escape(pattern)
+    m = re.search(rf'The (\d+)(?:st|nd|rd|th) {escaped}', content)
     if not m:
         return None
 
@@ -84,12 +90,15 @@ def fetch_meeting_number(date_str: str) -> int | None:
 def fix_meeting_number(text: str, date_str: str,
                        fallback_n: int | None = None) -> str:
     """
-    If the 'Nth Meeting of Noisebridge' line has a placeholder instead of a
-    real ordinal, fetch the correct number from the wiki and substitute it.
+    If the meeting number line has a placeholder instead of a real ordinal,
+    fetch the correct number from the wiki and substitute it.
 
-    fallback_n — use this number if the wiki lookup fails (e.g. extracted
-                 from the HTML comment hint before comments were stripped).
+    Skipped entirely if NB_WIKI_MEETING_NUM_PATTERN is not set.
+    fallback_n — use this number if the wiki lookup fails.
     """
+    if not os.getenv('NB_WIKI_MEETING_NUM_PATTERN', ''):
+        return text  # feature not configured for this org
+
     match = _MEETING_NUM_RE.search(text)
     if not match:
         return text
@@ -125,7 +134,7 @@ def process(raw_text: str, date_str: str = None,
     """
     Full processing pipeline:
       1. strip_artifacts         — remove template boilerplate (deterministic)
-      2. fix_meeting_number      — resolve ordinal from wiki (network, optional)
+      2. fix_meeting_number      — resolve ordinal from wiki (optional, needs config)
       3. fix_metadata_table      — fix Note-taker/Moderator row formatting
       4. generate_summary        — AI generates Meeting Summary (stored for review, not inserted)
       5. fix_ordered_lists       — convert 1. 2. 3. to MediaWiki # lists
@@ -133,7 +142,7 @@ def process(raw_text: str, date_str: str = None,
       7. format_task_board       — convert task bullet list to wikitable
       8. format_speaker_attributions — reformat "Name: text" to '''Name:''' text
       9. ensure_bullets          — bullet-ify Introductions / Short announcements
-     10. add_footer              — prepend {{meetings2026}}, append category link
+     10. add_footer              — prepend year banner and category link (if configured)
 
     Returns (content, metrics). metrics['steps'] is a list of step-report dicts
     (name, lines_in, lines_out, note) for pipeline observability; see AGENTS.md.
@@ -164,7 +173,7 @@ def process(raw_text: str, date_str: str = None,
     cleaned = _record('strip_artifacts', raw_text, strip_artifacts(raw_text, date_str=date_str))
 
     # 2. Fix meeting number (wiki lookup, falls back to comment hint)
-    if date_str:
+    if date_str and os.getenv('NB_WIKI_MEETING_NUM_PATTERN', ''):
         before = cleaned
         cleaned = fix_meeting_number(cleaned, date_str, fallback_n=_num_hint)
         m = _MEETING_NUM_RE.search(cleaned)
@@ -210,14 +219,20 @@ def process(raw_text: str, date_str: str = None,
         ensure_bullets(cleaned, ['Introductions', 'Short announcements and events']),
     )
 
-    # 10. Footer / banner
+    # 10. Footer — year banner and category link (both driven by config; skipped if blank)
     before = cleaned
-    if '{{meetings2026}}' not in cleaned:
-        cleaned = '{{meetings2026}}\n\n' + cleaned.lstrip()
-    if not cleaned.rstrip().endswith('[[Category:Meeting Notes]]'):
-        cleaned = cleaned.rstrip() + '\n\n[[Category:Meeting Notes]]'
+    year_banner   = os.getenv('NB_WIKI_YEAR_BANNER', '')
+    wiki_category = os.getenv('NB_WIKI_CATEGORY', '')
+    footer_notes  = []
+    if year_banner and year_banner not in cleaned:
+        cleaned = year_banner + '\n\n' + cleaned.lstrip()
+        footer_notes.append(year_banner)
+    category_tag = f'[[{wiki_category}]]' if wiki_category else ''
+    if category_tag and not cleaned.rstrip().endswith(category_tag):
+        cleaned = cleaned.rstrip() + '\n\n' + category_tag
+        footer_notes.append(category_tag)
     _record('add_footer', before, cleaned,
-            note='{{meetings2026}} banner + [[Category:Meeting Notes]]')
+            note=' + '.join(footer_notes) if footer_notes else 'nothing to add (not configured)')
 
     metrics['steps'] = steps
     return cleaned, metrics

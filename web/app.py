@@ -528,7 +528,7 @@ def login():
                 return redirect(next_url)
             else:
                 error = f'Login failed: {reason}' if reason else \
-                        'Invalid credentials. Use your Noisebridge wiki username and password.'
+                        'Invalid credentials. Check your wiki username and password.'
 
     return render_template('login.html', error=error,
                            next=request.args.get('next', ''))
