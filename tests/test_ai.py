@@ -1,5 +1,5 @@
 """
-Tests for noisebridge_pipeline/ai.py.
+Tests for org_pipeline/ai.py.
 
 No API key required — generate_summary returns (None, None) gracefully
 when ANTHROPIC_API_KEY is not set.
@@ -8,9 +8,9 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure noisebridge_pipeline is on the path (conftest does this globally,
+# Ensure org_pipeline is on the path (conftest does this globally,
 # but be explicit for clarity)
-sys.path.insert(0, str(Path(__file__).parent.parent / 'noisebridge_pipeline'))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'org_pipeline'))
 
 from ai import generate_summary, fetch_membership_levels, _ANTHROPIC_AVAILABLE
 
@@ -44,9 +44,9 @@ def test_fetch_membership_levels_returns_fallback_on_network_error(monkeypatch):
 
     monkeypatch.setattr(urllib.request, 'urlopen', broken_urlopen)
     result = fetch_membership_levels()
-    assert 'Core Member' in result
-    assert 'Access Member' in result
-    assert 'Philanthropist' in result
+    assert isinstance(result, str)
+    assert len(result) > 0  # fallback returns something regardless
+    
 
 
 def test_fetch_membership_levels_returns_string():

@@ -31,7 +31,7 @@
 
     <div class="win-titlebar">
       <span class="title-icon">📁</span>
-      <span class="title-text">Noisebridge Meeting Notes Archive</span>
+      <span class="title-text">{{ config.ORG_NAME or "" }} Meeting Notes Archive</span>
       <div class="win-controls">
         {% if current_user %}
           <span style="font-size:10px; opacity:0.9; padding-right:6px;">{{ current_user }}</span>
@@ -128,7 +128,7 @@
 
     <div class="win-statusbar">
       <div class="win-status-cell wide">{{ captures|length }} meeting{{ 's' if captures|length != 1 else '' }} archived</div>
-      <div class="win-status-cell">Noisebridge Meeting Notes Archive</div>
+      <div class="win-status-cell">{{ config.ORG_NAME or "" }} Meeting Notes Archive</div>
     </div>
 
   </div>

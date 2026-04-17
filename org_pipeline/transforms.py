@@ -1,5 +1,5 @@
 """
-transforms.py - Pure text transforms for Noisebridge meeting notes processing.
+transforms.py — Pure text transforms for meeting notes processing.
 
 Contains only deterministic, pure functions with no network I/O.
 All functions operate on strings or lists of strings and return the same.

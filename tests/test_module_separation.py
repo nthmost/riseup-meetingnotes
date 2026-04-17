@@ -1,7 +1,7 @@
 """
 Architectural test: enforce the LLM / non-LLM module boundary.
 
-Rule: `anthropic` may only be imported by noisebridge_pipeline/ai.py.
+Rule: `anthropic` may only be imported by org_pipeline/ai.py.
 Any other file importing it directly is a violation of the separation.
 
 This test catches accidental boundary violations at CI time so they
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-ALLOWED_TO_IMPORT_ANTHROPIC = {'noisebridge_pipeline/ai.py'}
+ALLOWED_TO_IMPORT_ANTHROPIC = {'org_pipeline/ai.py'}
 
 
 def _imports_anthropic(path: Path) -> bool:
@@ -34,7 +34,7 @@ def _imports_anthropic(path: Path) -> bool:
 
 
 def test_only_ai_module_imports_anthropic():
-    """No Python file outside noisebridge_pipeline/ai.py may import anthropic."""
+    """No Python file outside org_pipeline/ai.py may import anthropic."""
     violations = []
     for py_file in REPO_ROOT.rglob('*.py'):
         # Skip venv and __pycache__
@@ -51,13 +51,13 @@ def test_only_ai_module_imports_anthropic():
         f"The following files import 'anthropic' but are not in the allowed set "
         f"({ALLOWED_TO_IMPORT_ANTHROPIC}):\n"
         + '\n'.join(f'  {v}' for v in violations)
-        + "\n\nAll AI/LLM code must live in noisebridge_pipeline/ai.py."
+        + "\n\nAll AI/LLM code must live in org_pipeline/ai.py."
     )
 
 
 def test_transforms_has_no_network_imports():
     """transforms.py must remain pure — no network I/O, no AI."""
-    transforms = REPO_ROOT / 'noisebridge_pipeline' / 'transforms.py'
+    transforms = REPO_ROOT / 'org_pipeline' / 'transforms.py'
     tree = ast.parse(transforms.read_text('utf-8'))
     forbidden = {'urllib', 'requests', 'httpx', 'anthropic', 'openai', 'aiohttp'}
     found = []

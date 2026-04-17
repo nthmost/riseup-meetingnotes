@@ -1,16 +1,16 @@
 [Unit]
-Description=NBMeetingNotes — fetch raw pad content from Riseup
+Description=MeetingNotes — fetch raw pad content from Riseup
 After=network-online.target
 
 [Service]
 Type=oneshot
 User=nthmost
-WorkingDirectory=/opt/nbmeetingnotes
+WorkingDirectory=/opt/meetingnotes
 # Tuesday meeting → fetch Wednesday morning; "yesterday" gives Tuesday's date
 ExecStart=/bin/bash -c '\
   DATE=$(date -d yesterday +%%Y_%%m_%%d) && \
-  /opt/nbmeetingnotes/venv/bin/python3 -m pipeline.run \
+  /opt/meetingnotes/venv/bin/python3 -m pipeline.run \
     --date "$DATE" --fetch-only'
-EnvironmentFile=/opt/nbmeetingnotes/.env
+EnvironmentFile=/opt/meetingnotes/.env
 StandardOutput=journal
 StandardError=journal

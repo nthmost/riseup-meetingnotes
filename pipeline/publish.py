@@ -45,7 +45,7 @@ def publish(txn_id: int, meeting_date: str, content: str,
         wiki.edit_page(
             title=page_title,
             content=content,
-            summary=f'Auto-posted meeting notes for {meeting_date} (nbmeetingnotes)',
+            summary=f'Auto-posted meeting notes for {meeting_date} (meetingnotes)',
         )
     except urllib.error.HTTPError as e:
         if e.code in (403, 400):
@@ -55,7 +55,7 @@ def publish(txn_id: int, meeting_date: str, content: str,
             wiki.edit_page(
                 title=page_title,
                 content=content,
-                summary=f'Auto-posted meeting notes for {meeting_date} (nbmeetingnotes)',
+                summary=f'Auto-posted meeting notes for {meeting_date} (meetingnotes)',
             )
         else:
             raise

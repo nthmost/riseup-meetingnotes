@@ -1,5 +1,5 @@
 """
-noisebridge_pipeline/ai.py — AI summary generation.
+org_pipeline/ai.py — AI summary generation.
 
 This is the ONLY module in the pipeline that imports anthropic.
 Everything else is deterministic text transforms or network I/O.
@@ -22,45 +22,50 @@ except ImportError:
 
 def fetch_membership_levels() -> str:
     """
-    Fetch current Noisebridge membership tier names from the wiki.
-    Used only to build the AI summary prompt — not part of the
-    deterministic pipeline.
+    Fetch current membership tier names from the wiki (NB_WIKI_MEMBERSHIP_PAGE).
+    Used only to build the AI summary prompt context.
 
-    Returns a brief context string. Falls back to hardcoded description
-    on any network or parse failure.
+    Set NB_WIKI_MEMBERSHIP_PAGE to the wiki page title that lists membership tiers.
+    Set NB_WIKI_MEMBERSHIP_FALLBACK to a plain-text description used when the
+    fetch fails or the page is not configured.
+
+    Returns a brief context string for inclusion in the AI prompt.
     """
-    _FALLBACK = (
-        "Noisebridge membership tiers (current as of 2026): "
-        "Core Member (formerly 'Big M' Member) — full consensus rights, pays dues, 24-hour access. "
-        "Access Member (formerly 'Associate' or 'little m' Member) — entry-level membership. "
-        "Philanthropist — supporter/donor membership."
+    fallback = os.getenv(
+        'NB_WIKI_MEMBERSHIP_FALLBACK',
+        'Membership tiers are defined by the organisation.'
     )
-    wiki_api_url = os.getenv('NB_WIKI_API_URL', 'https://www.noisebridge.net/api.php')
+    membership_page = os.getenv('NB_WIKI_MEMBERSHIP_PAGE', '')
+    wiki_api_url = os.getenv('NB_WIKI_API_URL', '')
+
+    if not membership_page or not wiki_api_url:
+        return fallback
+
     try:
         params = {
             'action': 'query', 'prop': 'revisions',
-            'titles': 'Membership',
+            'titles': membership_page,
             'rvprop': 'content', 'rvslots': 'main',
-            'rvsection': '4',
             'format': 'json',
         }
         url = wiki_api_url + '?' + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={'User-Agent': os.getenv('NB_USER_AGENT', 'NBArchive/1.0')})
+        req = urllib.request.Request(url, headers={'User-Agent': os.getenv('NB_USER_AGENT', 'MeetingNotesBot/1.0')})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
         page = next(iter(data['query']['pages'].values()))
         if 'missing' in page or not page.get('revisions'):
-            return _FALLBACK
+            return fallback
         content = (page['revisions'][0].get('slots', {}).get('main', {}).get('*')
                    or page['revisions'][0].get('*', ''))
         lines = [l.strip() for l in content.splitlines()
                  if l.strip() and not l.strip().startswith('=') and not l.strip().startswith('{')]
         snippet = ' '.join(lines[:8])
-        return f"Current Noisebridge membership tier names (from wiki): {snippet}"
+        org_name = os.getenv('NB_ORG_NAME', 'the organisation')
+        return f"Current {org_name} membership tier names (from wiki): {snippet}"
     except Exception as e:
         print(f"Warning: could not fetch membership levels from wiki ({e}); using fallback.",
               file=sys.stderr)
-        return _FALLBACK
+        return fallback
 
 
 def generate_summary(content_text: str) -> tuple[str | None, dict | None]:
@@ -85,8 +90,9 @@ def generate_summary(content_text: str) -> tuple[str | None, dict | None]:
 
     client = _anthropic.Anthropic(api_key=api_key)
     membership_context = fetch_membership_levels()
+    org_name = os.getenv('NB_ORG_NAME', 'our organisation')
 
-    prompt = f"""You are producing the official public summary for a Noisebridge hackerspace meeting wiki page. This summary is emailed to the mailing list and posted to Discord.
+    prompt = f"""You are producing the official public summary for a {org_name} meeting wiki page. This summary is emailed to the mailing list and posted to chat/Discord.
 
 Read the meeting notes below carefully and write the full Meeting Summary.
 
@@ -95,18 +101,12 @@ STRICT RULES — these are non-negotiable:
 2. If a category has nothing to report, write "None".
 3. Use MediaWiki markup throughout: bold is '''text''' not **text**. No Markdown.
 4. NEVER include URLs anywhere. Drop them silently.
-5. Be concise. Names and outcomes only — no backstory, no dates, no context. "Loren forfeited duel to Naomi", not "Naomi declared forfeit in duel with Loren (challenged February 24th, no follow-up in 6 weeks)".
+5. Be concise. Names and outcomes only — no backstory, no dates, no context.
 6. For new members and associates, include their membership type in parentheses if stated. Use these current tier names: {membership_context}
 7. CRITICAL — Consensus Items: items are PROPOSED at one meeting and only pass if explicitly confirmed with no blocks. "Resolved, that..." is proposal language, NOT passage. Prefix with "proposed:" or "passed:".
 8. CRITICAL — Announcements: ONLY items explicitly listed under the Announcements section of the notes (upcoming events, external notices, brief shout-outs). Do NOT put equipment proposals, space improvement ideas, access policy discussions, or anything from the Discussion section here. When in doubt, leave it out of Announcements.
-9. CRITICAL — TLDR top sentence: only whole-organisation matters (board elections, major financial decisions, membership policy changes, significant consensus). Do NOT summarise regular discussion topics here. If nothing qualifies, one plain sentence describing what the meeting covered overall.
-10. CRITICAL — Discussion Items: headline format only. Topic + outcome + action/contact if one exists. Hard limit: 12 words per item. Do NOT explain, give context, or list multiple outcomes. If there is a named next step or contact person, end with it: "contact Elan", "Chris to cost out", "LX coordinating", etc.
-    WRONG: "Laser cutter relocation: Laser was moved without proper communication and reconnection; JD will ensure laser is restored before Sunday; larger moves need consensus."
-    RIGHT: "Laser cutter: restore before Sunday class; contact JD."
-    WRONG: "Morning access schedule: Ken clarified policy—people without access can be left in building during operation hours only, cannot leave or admit others."
-    RIGHT: "Morning access policy: operation-hours rules clarified."
-    WRONG: "Afterlight Echo pt2: Jane needs written permission from Noisebridge or property manager to hold event; contact Elan."
-    RIGHT: "Afterlight Echo: indoor event permission needed; contact Elan."
+9. CRITICAL — TLDR top sentence: only whole-organisation matters (elections, major financial decisions, membership policy changes, significant consensus). Do NOT summarise regular discussion topics here. If nothing qualifies, one plain sentence describing what the meeting covered overall.
+10. CRITICAL — Discussion Items: headline format only. Topic + outcome + action/contact if one exists. Hard limit: 12 words per item. Do NOT explain, give context, or list multiple outcomes. If there is a named next step or contact person, end with it.
 
 OUTPUT FORMAT — use this exactly, including the *# markup for Discussion Items:
 

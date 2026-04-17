@@ -272,7 +272,7 @@
                 </form>
               {% endif %}
               <form method="post" action="/publish/{{ txn.id }}" style="display:inline;"
-                    onsubmit="return confirm('Publish to the official Meeting_Notes page on noisebridge.net?')">
+                    onsubmit="return confirm('Publish to the official wiki page?')">
                               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="win-btn"
                         style="font-weight:bold; font-size:12px; background:#aaffaa; padding:3px 14px;">
@@ -383,7 +383,7 @@
             border:1px solid #808080; padding:6px 12px;
             font-size:11px; white-space:nowrap;">
             Not loading? Try
-            <a href="#" onclick="switchWiki('eu');return false;">noisebridge.eu</a> or
+            <a href="#" onclick="switchWiki('eu');return false;">mirror wiki</a> or
             <a id="fallback-link" href="{{ wiki_eu }}" target="_blank">open in tab ↗</a>
           </div>
         </div>
@@ -391,9 +391,9 @@
           <div class="win-status-cell wide" id="wiki-url-bar">{{ wiki_net }}</div>
           <div class="win-status-cell" id="wiki-status">Loading…</div>
           <div class="win-status-cell" style="padding:0;">
-            <button id="flag-us" onclick="switchWiki('net')" title="noisebridge.net (US)"
+            <button id="flag-us" onclick="switchWiki('net')" title="wiki (primary)"
               style="background:none; border:none; font-size:16px; padding:1px 6px; cursor:pointer; opacity:1;">🇺🇸</button>
-            <button id="flag-ie" onclick="switchWiki('eu')"  title="noisebridge.eu (Ireland)"
+            <button id="flag-ie" onclick="switchWiki('eu')"  title="wiki (mirror)"
               style="background:none; border:none; font-size:16px; padding:1px 6px; cursor:pointer; opacity:0.4;">🇮🇪</button>
           </div>
         </div>
@@ -526,7 +526,7 @@
       <div class="win-dialog-text">
         <strong>Wiki updated successfully.</strong>
         The processed notes have been published to
-        <a href="{{ wiki_net }}" target="_blank">noisebridge.net</a>.
+        <a href="{{ wiki_net }}" target="_blank">the wiki</a>.
         It may take a moment to appear.
       </div>
     </div>
@@ -596,7 +596,7 @@
     flagIE.style.opacity = (current === 'eu') ? '1'   : '0.35';
     flagUS.style.filter  = (current !== 'eu') ? 'none': 'grayscale(0.3)';
     flagIE.style.filter  = (current === 'eu') ? 'none': 'grayscale(0.3)';
-    flagUS.title = IS_PREVIEW ? 'Preview page (noisebridge.net)' : 'noisebridge.net (US)';
+    flagUS.title = IS_PREVIEW ? 'Preview page' : 'wiki (primary)';
     linkOpen.href = currentUrl();
     urlBar.textContent = currentUrl();
     const fallback = document.getElementById('fallback-link');
