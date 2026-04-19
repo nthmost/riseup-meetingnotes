@@ -820,11 +820,3 @@ def _ordinal(n: int) -> str:
     else:
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f'{n}{suffix}'
-
-
-# Matches: "The 859th Meeting of Noisebridge" inside the category link
-_MEETING_NUM_RE = re.compile(
-    r'(\[https://www\.noisebridge\.net/wiki/Category:Meeting_Notes The )'
-    r'([^\]]+?)'
-    r'( Meeting of Noisebridge\])'
-)

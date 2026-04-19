@@ -28,8 +28,35 @@ from ai import generate_summary
 from transforms import (
     strip_artifacts, fix_metadata_table, fix_discussion_item_blocks,
     format_speaker_attributions, format_task_board, fix_ordered_lists,
-    ensure_bullets, insert_summary, _ordinal, _MEETING_NUM_RE,
+    ensure_bullets, insert_summary, _ordinal,
 )
+
+
+def _build_meeting_num_re():
+    """
+    Build the meeting-number regex from NB_WIKI_MEETING_NUM_PATTERN.
+
+    The pattern matches the category link that wraps the meeting ordinal, e.g.:
+      [https://wiki.example.org/Category:Meetings The 42nd Meeting of YourOrg]
+
+    Requires NB_WIKI_MEETING_NUM_PATTERN (e.g. "Meeting of YourOrg") and
+    NB_WIKI_API_URL to construct the wiki base.  Returns None when not configured.
+    """
+    pattern = os.getenv('NB_WIKI_MEETING_NUM_PATTERN', '')
+    wiki_url = os.getenv('NB_WIKI_PAGE_URL', '').rstrip('/')
+    category  = os.getenv('NB_WIKI_MEETING_CATEGORY', 'Category:Meeting_Notes')
+    if not pattern or not wiki_url:
+        return None
+    escaped_url     = re.escape(f'{wiki_url}/{category}')
+    escaped_pattern = re.escape(pattern)
+    return re.compile(
+        rf'(\[{escaped_url} The )'
+        rf'([^\]]+?)'
+        rf'( {escaped_pattern}\])'
+    )
+
+
+_MEETING_NUM_RE = _build_meeting_num_re()
 
 
 def fetch_meeting_number(date_str: str) -> int | None:
@@ -97,7 +124,7 @@ def fix_meeting_number(text: str, date_str: str,
     Skipped entirely if NB_WIKI_MEETING_NUM_PATTERN is not set.
     fallback_n — use this number if the wiki lookup fails.
     """
-    if not os.getenv('NB_WIKI_MEETING_NUM_PATTERN', ''):
+    if _MEETING_NUM_RE is None:
         return text  # feature not configured for this org
 
     match = _MEETING_NUM_RE.search(text)
@@ -172,7 +199,7 @@ def process(raw_text: str, date_str: str = None,
     cleaned = _record('strip_artifacts', raw_text, strip_artifacts(raw_text, date_str=date_str))
 
     # 2. Fix meeting number (wiki lookup, falls back to comment hint)
-    if date_str and os.getenv('NB_WIKI_MEETING_NUM_PATTERN', ''):
+    if date_str and _MEETING_NUM_RE is not None:
         before = cleaned
         cleaned = fix_meeting_number(cleaned, date_str, fallback_n=_num_hint)
         m = _MEETING_NUM_RE.search(cleaned)
