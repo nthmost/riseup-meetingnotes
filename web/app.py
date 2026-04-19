@@ -36,6 +36,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['WTF_CSRF_TIME_LIMIT'] = None  # tokens valid for session lifetime
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 csrf = CSRFProtect(app)
 
