@@ -319,7 +319,10 @@ def fetch_only(meeting_date: str) -> int:
 
     # Check the meeting notes template version — alerts the UI if it has changed
     # since the pipeline's artifact-removal rules were last updated.
+    # Skipped when WIKI_TEMPLATE_TITLE is not configured.
     try:
+        if not config.WIKI_TEMPLATE_TITLE:
+            return capture_id
         tmpl_content, tmpl_revid = fetch.fetch_wiki_page(config.WIKI_TEMPLATE_TITLE)
         if tmpl_content is not None and tmpl_revid is not None:
             tmpl_sha = hashlib.sha256(tmpl_content.encode('utf-8')).hexdigest()
