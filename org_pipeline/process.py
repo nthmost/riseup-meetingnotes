@@ -11,12 +11,14 @@ Public API:
     fix_meeting_number(text, date_str, fallback_n)   -> str
 """
 import json
+import logging
 import os
 import re
-import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 
@@ -68,8 +70,7 @@ def fetch_meeting_number(date_str: str) -> int | None:
     pages = data.get('query', {}).get('pages', {})
     page = next(iter(pages.values()))
     if 'missing' in page:
-        print(f"Warning: wiki page '{prev_title}' not found; cannot derive meeting number.",
-              file=sys.stderr)
+        log.warning(f"wiki page '{prev_title}' not found; cannot derive meeting number")
         return None
 
     revisions = page.get('revisions', [])
@@ -107,25 +108,23 @@ def fix_meeting_number(text: str, date_str: str,
     if re.match(r'^\d+(?:st|nd|rd|th)$', current):
         return text  # already a valid ordinal — trust the notetaker
 
-    print(f"Meeting number placeholder detected: '{current}' — querying wiki...",
-          file=sys.stderr)
+    log.info(f"meeting number placeholder '{current}' — querying wiki")
     n = None
     try:
         n = fetch_meeting_number(date_str)
     except Exception as e:
-        print(f"Warning: could not fetch meeting number: {e}", file=sys.stderr)
+        log.warning(f"could not fetch meeting number: {e}")
 
     if n is None and fallback_n is not None:
-        print(f"Using fallback meeting number from comment: {fallback_n}", file=sys.stderr)
+        log.info(f"using fallback meeting number from comment: {fallback_n}")
         n = fallback_n
 
     if n is None:
-        print("Warning: could not determine meeting number; leaving placeholder.",
-              file=sys.stderr)
+        log.warning("could not determine meeting number; leaving placeholder")
         return text
 
     ordinal = _ordinal(n)
-    print(f"Meeting number resolved: {ordinal}", file=sys.stderr)
+    log.info(f"meeting number resolved: {ordinal}")
     return _MEETING_NUM_RE.sub(rf'\g<1>{ordinal}\g<3>', text)
 
 

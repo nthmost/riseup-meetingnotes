@@ -8,10 +8,12 @@ Public API:
     generate_summary(content_text) -> (summary_text | None, metrics | None)
 """
 import json
+import logging
 import os
-import sys
 import urllib.parse
 import urllib.request
+
+log = logging.getLogger(__name__)
 
 try:
     import anthropic as _anthropic
@@ -63,8 +65,7 @@ def fetch_membership_levels() -> str:
         org_name = os.getenv('NB_ORG_NAME', 'the organisation')
         return f"Current {org_name} membership tier names (from wiki): {snippet}"
     except Exception as e:
-        print(f"Warning: could not fetch membership levels from wiki ({e}); using fallback.",
-              file=sys.stderr)
+        log.warning(f"could not fetch membership levels from wiki: {e}; using fallback")
         return fallback
 
 
@@ -79,13 +80,12 @@ def generate_summary(content_text: str) -> tuple[str | None, dict | None]:
     by this function. Insertion is a separate step triggered by the user.
     """
     if not _ANTHROPIC_AVAILABLE:
-        print("Warning: 'anthropic' package not installed. Skipping AI summary.",
-              file=sys.stderr)
+        log.warning("anthropic package not installed; skipping AI summary")
         return None, None
 
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
-        print("Warning: ANTHROPIC_API_KEY not set. Skipping AI summary.", file=sys.stderr)
+        log.warning("ANTHROPIC_API_KEY not set; skipping AI summary")
         return None, None
 
     client = _anthropic.Anthropic(api_key=api_key)
@@ -125,7 +125,7 @@ OUTPUT FORMAT — use this exactly, including the *# markup for Discussion Items
 Meeting notes:
 {content_text}"""
 
-    print("Generating summary via Claude Haiku...", file=sys.stderr)
+    log.info("generating summary via Claude Haiku")
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1024,
