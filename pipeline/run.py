@@ -77,7 +77,7 @@ def _resolve_from_parent(parent_txn_id: int, flags: dict) -> PipelineInput:
             ) as f:
                 f.write(wiki_content)
                 tmp_path = Path(f.name)
-            log.info("[run] using wiki revid={revid} ({len(wiki_content)} bytes)")
+            log.info(f"[run] using wiki revid={revid} ({len(wiki_content)} bytes)")
             return PipelineInput(
                 capture_id=capture_id,
                 raw_path=tmp_path,
@@ -87,7 +87,7 @@ def _resolve_from_parent(parent_txn_id: int, flags: dict) -> PipelineInput:
                 source_wiki_revid=revid,
                 _tmp_path=tmp_path,
             )
-        log.info("[run] wiki page {published_page} not found, falling back to parent output")
+        log.info(f"[run] wiki page {published_page} not found, falling back to parent output")
 
     if not parent['output_path'] or not Path(parent['output_path']).exists():
         raise RuntimeError("No wiki content and no parent output file available")
@@ -156,7 +156,7 @@ def start_transformation(inp: PipelineInput, parent_txn_id: int | None) -> int:
         flags=inp.flags,
         input_sha256=input_sha256,
     )
-    log.info("[run] transformation id={txn_id}  capture={inp.capture_id}  parent={parent_txn_id}")
+    log.info(f"[run] transformation id={txn_id}  capture={inp.capture_id}  parent={parent_txn_id}")
     return txn_id
 
 
@@ -187,11 +187,11 @@ def save_output(
                 duration_seconds=result.duration_seconds,
             )
             trace_path.write_text(trace_md, encoding='utf-8')
-            log.info("[run] trace  → {trace_path}")
+            log.info(f"[run] trace  → {trace_path}")
 
     if result.generated_summary:
         db.record_generated_summary(txn_id, result.generated_summary)
-        log.info("[run] summary stored for review ({len(result.generated_summary)} chars)")
+        log.info(f"[run] summary stored for review ({len(result.generated_summary)} chars)")
 
     db.update_transformation_output(
         txn_id=txn_id,
@@ -202,7 +202,7 @@ def save_output(
         artifact_lines_removed=result.artifact_lines_removed,
         sections_found=result.sections_found,
     )
-    log.info("[run] done  duration={result.duration_seconds:.1f}s  output={out_path}")
+    log.info(f"[run] done  duration={result.duration_seconds:.1f}s  output={out_path}")
     return out_path
 
 
@@ -272,23 +272,23 @@ def fetch_only(meeting_date: str) -> int:
     """
     capture = db.get_capture_by_date(meeting_date)
     if capture:
-        log.info("[fetch] already captured {meeting_date} (id={capture['id']})")
+        log.info(f"[fetch] already captured {meeting_date} (id={capture['id']})")
         capture_id = capture['id']
     else:
         content, capture_id = fetch.fetch_and_archive(meeting_date)
-        log.info("[fetch] archived {meeting_date} ({len(content)} bytes, capture id={capture_id})")
+        log.info(f"[fetch] archived {meeting_date} ({len(content)} bytes, capture id={capture_id})")
 
     existing_txn = db.get_latest_transformation(capture_id)
     if existing_txn:
-        log.info("[fetch] transformation already recorded for {meeting_date}, skipping wiki check")
+        log.info(f"[fetch] transformation already recorded for {meeting_date}, skipping wiki check")
         return capture_id
 
     page_title = f'Meeting_Notes_{meeting_date}'
-    log.info("[fetch] checking wiki for existing {page_title} ...")
+    log.info(f"[fetch] checking wiki for existing {page_title} ...")
     wiki_content, revid = fetch.fetch_wiki_page(page_title)
 
     if wiki_content is not None:
-        log.info("[fetch] found existing wiki page at revid={revid}, recording import")
+        log.info(f"[fetch] found existing wiki page at revid={revid}, recording import")
         sha = hashlib.sha256(wiki_content.encode('utf-8')).hexdigest()
         txn_id = db.insert_transformation(
             raw_capture_id=capture_id,
@@ -302,16 +302,16 @@ def fetch_only(meeting_date: str) -> int:
         )
         db.record_wiki_source(txn_id, page_title, revid)
         db.record_publish(txn_id, page_title, datetime.now(timezone.utc).isoformat())
-        log.info("[fetch] import transformation id={txn_id}")
+        log.info(f"[fetch] import transformation id={txn_id}")
         # Auto-lock: this meeting's wiki page has existing content
         try:
             rev_count = fetch.fetch_wiki_revision_count(page_title)
             db.set_capture_locked(capture_id, locked=True, wiki_revisions=rev_count)
-            log.info("[fetch] capture locked (wiki page has {rev_count} revisions)")
+            log.info(f"[fetch] capture locked (wiki page has {rev_count} revisions)")
         except Exception as e:
             log.warning(f"[fetch] could not get revision count: {e}")
     else:
-        log.info("[fetch] no existing wiki page found for {page_title}")
+        log.info(f"[fetch] no existing wiki page found for {page_title}")
 
     # Check the meeting notes template version — alerts the UI if it has changed
     # since the pipeline's artifact-removal rules were last updated.
@@ -350,9 +350,9 @@ def generate_summary_for_txn(txn_id: int) -> None:
     )
     if result.generated_summary:
         db.record_generated_summary(txn_id, result.generated_summary)
-        log.info("[run] summary generated and stored for txn={txn_id}")
+        log.info(f"[run] summary generated and stored for txn={txn_id}")
     else:
-        log.info("[run] summary generation produced no output for txn={txn_id}")
+        log.info(f"[run] summary generation produced no output for txn={txn_id}")
 
 
 # ── Summary insertion ──────────────────────────────────────────────────────────
@@ -432,7 +432,7 @@ if __name__ == '__main__':
 
     if args.fetch_only:
         capture_id = fetch_only(args.date)
-        log.info("[fetch-only] capture id={capture_id}")
+        log.info(f"[fetch-only] capture id={capture_id}")
         sys.exit(0)
 
     flags = {'generate_ai_summary': not args.no_summary}
@@ -444,4 +444,4 @@ if __name__ == '__main__':
         publish=args.publish,
         dry_run=args.dry_run,
     )
-    log.info("[run] transformation id={txn_id}")
+    log.info(f"[run] transformation id={txn_id}")
