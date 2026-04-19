@@ -212,21 +212,25 @@ def record_provenance(
     source_wiki_page: str | None = None,
     source_wiki_revid: int | None = None,
 ) -> None:
-    """Record model name, processor version, and wiki source in the DB."""
+    """Record model name, processor version, wiki source, and template version atomically."""
     with db.conn() as c:
         c.execute(
             'UPDATE transformations SET model_name=?, processor_version=? WHERE id=?',
             (result.model_name, result.processor_version, txn_id),
         )
-    if source_wiki_page:
-        db.record_wiki_source(txn_id, source_wiki_page, source_wiki_revid)
-    # Record which template version was active at the time of this run
-    with db.conn() as c:
+        if source_wiki_page:
+            c.execute(
+                'UPDATE transformations SET source_wiki_page=?, source_wiki_revid=? WHERE id=?',
+                (source_wiki_page, source_wiki_revid, txn_id),
+            )
         row = c.execute(
             'SELECT revid FROM template_snapshots ORDER BY id DESC LIMIT 1'
         ).fetchone()
-    if row:
-        db.record_transformation_template(txn_id, row['revid'])
+        if row:
+            c.execute(
+                'UPDATE transformations SET template_revid=? WHERE id=?',
+                (row['revid'], txn_id),
+            )
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
