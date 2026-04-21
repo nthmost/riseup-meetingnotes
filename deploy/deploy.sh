@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-HOST="${MEETINGNOTES_HOST:-zephyr}"
+HOST="${MEETINGNOTES_HOST:-yourserver}"
 REMOTE_DIR="${MEETINGNOTES_REMOTE_DIR:-/opt/meetingnotes}"
 SERVICE="${MEETINGNOTES_SERVICE:-meetingnotes}"
 LOCAL_SRC="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,15 +42,17 @@ deploy() {
 setup() {
     log "=== First-time setup on $HOST ==="
 
+    # SERVICE_USER is the Linux user that will run the process.
+    # Set MEETINGNOTES_USER or it defaults to the current SSH user.
+    SERVICE_USER="${MEETINGNOTES_USER:-$(whoami)}"
+
     ssh "$HOST" "
         sudo mkdir -p $REMOTE_DIR
-        sudo chown nthmost:nthmost $REMOTE_DIR
-        sudo mkdir -p /var/www/nthmost.net/meetingnotes
-        sudo chown nthmost:nthmost /var/www/nthmost.net/meetingnotes
+        sudo chown \$USER:\$USER $REMOTE_DIR
         sudo mkdir -p /var/lib/meetingnotes
-        sudo chown nthmost:nthmost /var/lib/meetingnotes
+        sudo chown $SERVICE_USER:$SERVICE_USER /var/lib/meetingnotes
         sudo mkdir -p /var/log/meetingnotes
-        sudo chown nthmost:nthmost /var/log/meetingnotes
+        sudo chown $SERVICE_USER:$SERVICE_USER /var/log/meetingnotes
     "
 
     log "Creating venv ..."

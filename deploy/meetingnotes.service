@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=nthmost
+User=www-data
 WorkingDirectory=/opt/meetingnotes
 ExecStart=/opt/meetingnotes/venv/bin/gunicorn \
     --bind 127.0.0.1:8237 \

@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=nthmost
+User=www-data
 WorkingDirectory=/opt/meetingnotes
 # Tuesday meeting → fetch Wednesday morning; "yesterday" gives Tuesday's date
 ExecStart=/bin/bash -c '\

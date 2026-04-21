@@ -1,13 +1,10 @@
-# nbarchive
+# riseup-meetingnotes
 
-Meeting notes pipeline and archive for [Noisebridge](https://www.noisebridge.net).
+Meeting notes pipeline and archive for organisations that take notes in [Riseup Pad](https://pad.riseup.net) and publish to a [MediaWiki](https://www.mediawiki.org) instance.
 
-Fetches raw notes from the Riseup Pad after each Tuesday meeting, cleans them
-with deterministic text transforms, generates an AI summary, and publishes to
-the Noisebridge wiki. Every pass is recorded with full provenance so bad outputs
-can be audited, rated, and re-run.
+Fetches raw notes from the pad after each meeting, cleans them with deterministic text transforms, generates an AI summary for review, and publishes to the wiki. Every pass is recorded with full provenance so bad outputs can be audited, rated, and re-run.
 
-Live at **https://nbarchive.nthmost.net**
+Originally built for [Noisebridge](https://www.noisebridge.net) and deployed at **https://nbarchive.nthmost.net** — adapt `org_pipeline/` for your organisation.
 
 ---
 
