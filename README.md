@@ -4,7 +4,7 @@ Meeting notes pipeline and archive for organisations that take notes in [Riseup 
 
 Fetches raw notes from the pad after each meeting, cleans them with deterministic text transforms, generates an AI summary for review, and publishes to the wiki. Every pass is recorded with full provenance so bad outputs can be audited, rated, and re-run.
 
-Originally built for [Noisebridge](https://www.noisebridge.net) and deployed at **https://nbarchive.nthmost.net** — adapt `org_pipeline/` for your organisation.
+Originally built for [Noisebridge](https://www.noisebridge.net). Adapt `org_pipeline/` for your organisation.
 
 ---
 
