@@ -40,6 +40,11 @@ class WikiAPI:
                     time.sleep(wait)
                     continue
                 raise
+            except urllib.error.URLError as e:
+                if attempt < _retries:
+                    time.sleep(2 ** (attempt + 1))
+                    continue
+                raise
 
     def login(self, username: str, password: str) -> str:
         """

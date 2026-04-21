@@ -15,7 +15,7 @@ def _warn_if_missing(value: str, var: str, description: str) -> str:
     if not value:
         warnings.warn(
             f"{var} is not set — {description} will not work. Set {var} in .env.",
-            stacklevel=3,
+            stacklevel=2,
         )
     return value
 

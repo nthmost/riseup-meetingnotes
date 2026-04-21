@@ -92,6 +92,12 @@ def generate_summary(content_text: str) -> tuple[str | None, dict | None]:
     membership_context = fetch_membership_levels()
     org_name = os.getenv('NB_ORG_NAME', 'our organisation')
 
+    # Cap input to avoid runaway cost/latency on unexpectedly large documents
+    max_chars = int(os.getenv('NB_AI_MAX_CHARS', '50000'))
+    if len(content_text) > max_chars:
+        log.warning(f"content_text truncated from {len(content_text)} to {max_chars} chars for AI summary")
+        content_text = content_text[:max_chars]
+
     prompt = f"""You are producing the official public summary for a {org_name} meeting wiki page. This summary is emailed to the mailing list and posted to chat/Discord.
 
 Read the meeting notes below carefully and write the full Meeting Summary.
@@ -139,4 +145,8 @@ Meeting notes:
             'output_tokens': message.usage.output_tokens,
         } if hasattr(message, 'usage') else None,
     }
-    return message.content[0].text.strip(), metrics
+    block = message.content[0]
+    if not hasattr(block, 'text'):
+        log.warning(f"unexpected content block type from API: {type(block).__name__}; skipping summary")
+        return None, metrics
+    return block.text.strip(), metrics
