@@ -12,7 +12,7 @@ import urllib.error
 
 import config
 import db
-from wiki import WikiAPI
+from wiki import WikiAPI, StaleSessionError
 
 log = logging.getLogger(__name__)
 
@@ -32,32 +32,37 @@ def _get_wiki_session() -> WikiAPI:
     return _wiki_session
 
 
+def _invalidate_session() -> None:
+    global _wiki_session
+    _wiki_session = None
+
+
 def publish(txn_id: int, meeting_date: str, content: str,
             page_title: str = None) -> None:
     """Push processed content to the NB wiki and record it in the DB."""
     from datetime import datetime, timezone
 
-    global _wiki_session
-    wiki = _get_wiki_session()
     if page_title is None:
         page_title = f'Meeting_Notes_{meeting_date}'
+    summary = f'Auto-posted meeting notes for {meeting_date} (meetingnotes)'
+
+    def _attempt():
+        wiki = _get_wiki_session()
+        wiki.edit_page(title=page_title, content=content, summary=summary)
+
     try:
-        wiki.edit_page(
-            title=page_title,
-            content=content,
-            summary=f'Auto-posted meeting notes for {meeting_date} (meetingnotes)',
-        )
+        _attempt()
+    except StaleSessionError as e:
+        log.warning(f"[wiki] stale session ({e}), re-logging in and retrying...")
+        _invalidate_session()
+        _attempt()
     except urllib.error.HTTPError as e:
         if e.code in (403, 400):
-            log.warning(f"[wiki] session error ({e.code}), re-logging in...")
-            _wiki_session = None
-            wiki = _get_wiki_session()
-            wiki.edit_page(
-                title=page_title,
-                content=content,
-                summary=f'Auto-posted meeting notes for {meeting_date} (meetingnotes)',
-            )
+            log.warning(f"[wiki] HTTP {e.code}, re-logging in and retrying...")
+            _invalidate_session()
+            _attempt()
         else:
             raise
+
     db.record_publish(txn_id, page_title, datetime.now(timezone.utc).isoformat())
     log.info(f"[publish] published → {config.WIKI_PAGE_URL}/{page_title}")

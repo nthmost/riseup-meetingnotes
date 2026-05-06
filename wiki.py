@@ -13,6 +13,18 @@ import urllib.request
 
 import config
 
+# MediaWiki returns this CSRF token for unauthenticated requests; if we see it
+# our session has expired and the caller must re-login before retrying.
+ANON_CSRF_TOKEN = '+\\'
+
+
+class StaleSessionError(RuntimeError):
+    """Raised when the MediaWiki session has expired (anon CSRF token returned)."""
+
+
+class WikiAPIError(RuntimeError):
+    """Raised when the MediaWiki API returns an error or non-Success edit result."""
+
 
 class WikiAPI:
     def __init__(self, api_url: str, user_agent: str = config.USER_AGENT):
@@ -63,18 +75,35 @@ class WikiAPI:
             return 'Success'
         return login_resp.get('login', {}).get('reason', result or 'Unknown error')
 
-    def edit_page(self, title: str, content: str, summary: str) -> None:
+    def edit_page(self, title: str, content: str, summary: str) -> dict:
         """
         Create or overwrite a wiki page.
         Must be logged in first (same WikiAPI instance).
-        Raises on network or API error.
+        Raises StaleSessionError if the session has expired (anon CSRF token),
+        WikiAPIError on any other API-level error, urllib errors on network failures.
         """
         csrf_resp = self.call({'action': 'query', 'meta': 'tokens'})
         csrf      = csrf_resp['query']['tokens']['csrftoken']
-        self.call({}, post={
+        if csrf == ANON_CSRF_TOKEN:
+            raise StaleSessionError(
+                'CSRF token came back as anonymous — wiki session has expired'
+            )
+        resp = self.call({}, post={
             'action':  'edit',
             'title':   title,
             'text':    content,
             'summary': summary,
             'token':   csrf,
         })
+        if 'error' in resp:
+            err = resp['error']
+            code = err.get('code', '')
+            # assertuserfailed / badtoken can also indicate a stale session
+            if code in ('assertuserfailed', 'badtoken', 'mustbeloggedin'):
+                raise StaleSessionError(f"API error {code}: {err.get('info', '')}")
+            raise WikiAPIError(f"API error {code}: {err.get('info', '')}")
+        edit = resp.get('edit', {})
+        result = edit.get('result')
+        if result != 'Success':
+            raise WikiAPIError(f"edit returned non-Success result: {resp}")
+        return edit
