@@ -566,14 +566,17 @@ def format_speaker_attributions(text: str) -> str:
     # Strip leading spaces from ALL lines globally (prevents <pre> boxes everywhere)
     text = re.sub(r'^ +', '', text, flags=re.MULTILINE)
 
-    # Strict name pattern: each word must start with a capital letter.
-    # Prevents multi-word labels like "Action item", "Door code opinion".
+    # Name pattern: the first word may start with a lower- OR upper-case letter
+    # (handles lowercase handles like "naomi:", "jc:"), but any *subsequent* word
+    # must still start with a capital. Keeping the continuation capitalized means
+    # multi-word labels like "action item", "door code opinion" don't get captured
+    # as a speaker name (the lowercase second word breaks the match).
     # (?!\d) blocks "Width: 67" style measurements.
-    # (?![A-Z][a-z]+:) blocks "Dimensions: Depth:" style chained labels.
+    # (?![A-Za-z][a-z]+:) blocks "Dimensions: Depth:" style chained labels (any case).
     # Optional trailing (qualifier) handles "Daniel (solderfumes)", "Daniel (web)" etc.
     # Uses [^\S\n]+ (not \s+) to prevent the name from spanning across newlines.
-    name = r'([A-Z][a-zA-Z0-9\'/]*(?:[^\S\n]+[A-Z][a-zA-Z0-9\'/]*){0,3}(?:[^\S\n]+\([^)]+\))?)'
-    no_label = r'(?!\d)(?![A-Z][a-z]+:)'
+    name = r'([A-Za-z][a-zA-Z0-9\'/]*(?:[^\S\n]+[A-Z][a-zA-Z0-9\'/]*){0,3}(?:[^\S\n]+\([^)]+\))?)'
+    no_label = r'(?!\d)(?![A-Za-z][a-z]+:)'
     # Use [^\S\n]+ (non-newline whitespace) for trailing space after - or :
     # This prevents patterns from consuming newlines and merging lines.
     sp = r'[^\S\n]+'

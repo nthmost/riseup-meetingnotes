@@ -190,6 +190,24 @@ def test_formats_dash_attribution():
     result = format_speaker_attributions(text)
     assert "'''Bob:'''" in result
 
+def test_formats_lowercase_colon_attribution():
+    text = '= Discussion Items =\n* naomi: said something\n'
+    result = format_speaker_attributions(text)
+    assert "'''naomi:'''" in result
+
+def test_formats_lowercase_dash_attribution():
+    text = '= Discussion Items =\n* jc - did a thing\n'
+    result = format_speaker_attributions(text)
+    assert "'''jc:'''" in result
+
+def test_lowercase_multiword_label_not_attributed():
+    # Multi-word lowercase labels are NOT speaker names — the capitalized
+    # continuation requirement keeps "action item:" from being captured.
+    text = '= Discussion Items =\n* action item: fix the laser\n'
+    result = format_speaker_attributions(text)
+    assert "'''action item:'''" not in result
+    assert "'''action:'''" not in result
+
 def test_skips_introductions_section():
     text = '= Introductions =\n* Carol: intro blurb\n= Discussion Items =\n'
     result = format_speaker_attributions(text)
