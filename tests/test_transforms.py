@@ -208,6 +208,22 @@ def test_lowercase_multiword_label_not_attributed():
     assert "'''action item:'''" not in result
     assert "'''action:'''" not in result
 
+def test_lowercase_label_words_not_attributed():
+    # Common single-word labels must not be treated as speaker names,
+    # in either colon or dash form.
+    for line in ('* note: remember to lock up',
+                 '* todo - fix the laser',
+                 '* fyi: parking changed'):
+        text = f'= Discussion Items =\n{line}\n'
+        result = format_speaker_attributions(text)
+        assert "'''" not in result, f'label wrongly attributed: {line!r} -> {result!r}'
+
+def test_name_starting_with_label_letters_still_attributed():
+    # A real name that merely starts with a denylisted word is unaffected.
+    text = '= Discussion Items =\n* Noteworthy: said something\n'
+    result = format_speaker_attributions(text)
+    assert "'''Noteworthy:'''" in result
+
 def test_skips_introductions_section():
     text = '= Introductions =\n* Carol: intro blurb\n= Discussion Items =\n'
     result = format_speaker_attributions(text)

@@ -575,7 +575,20 @@ def format_speaker_attributions(text: str) -> str:
     # (?![A-Za-z][a-z]+:) blocks "Dimensions: Depth:" style chained labels (any case).
     # Optional trailing (qualifier) handles "Daniel (solderfumes)", "Daniel (web)" etc.
     # Uses [^\S\n]+ (not \s+) to prevent the name from spanning across newlines.
-    name = r'([A-Za-z][a-zA-Z0-9\'/]*(?:[^\S\n]+[A-Z][a-zA-Z0-9\'/]*){0,3}(?:[^\S\n]+\([^)]+\))?)'
+    #
+    # Denylist: common single-word labels that look like "name:" / "name -" but
+    # are not speaker attributions. Now that the first word may be lowercase,
+    # these would otherwise be mistaken for speakers. Matched case-insensitively,
+    # and only when immediately followed (optional spaces) by ':' or '-', so real
+    # names that merely start with these letters (e.g. "Noteworthy:") are unaffected.
+    label_words = (
+        'note', 'notes', 'todo', 'todos', 'action', 'actions',
+        'update', 'updates', 'status', 'fyi', 'tldr', 'summary',
+        'agenda', 'topic', 'topics', 'decision', 'decisions',
+        'aside', 'misc', 'eg', 'ie', 'ps', 'nb',
+    )
+    not_label_word = r'(?!(?i:' + '|'.join(label_words) + r')[^\S\n]*[-:])'
+    name = not_label_word + r'([A-Za-z][a-zA-Z0-9\'/]*(?:[^\S\n]+[A-Z][a-zA-Z0-9\'/]*){0,3}(?:[^\S\n]+\([^)]+\))?)'
     no_label = r'(?!\d)(?![A-Za-z][a-z]+:)'
     # Use [^\S\n]+ (non-newline whitespace) for trailing space after - or :
     # This prevents patterns from consuming newlines and merging lines.
