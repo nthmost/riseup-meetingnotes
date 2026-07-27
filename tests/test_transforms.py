@@ -12,6 +12,7 @@ from transforms import (
     fix_nav_links,
     fix_date_metadata,
     fix_metadata_table,
+    fix_discussion_item_blocks,
     insert_summary,
     ensure_bullets,
     _ordinal,
@@ -177,8 +178,48 @@ def test_strip_artifacts_collapses_blank_lines():
     result = strip_artifacts(text)
     assert '\n\n\n' not in result
 
+def test_strip_artifacts_strips_leading_spaces():
+    text = '    == Discussion Items ==\n    * Naomi: hello\n    {{DiscussionItem|\n     | topic = foo\n    }}\n'
+    result = strip_artifacts(text)
+    for line in result.splitlines():
+        assert not line.startswith(' '), f'line still has leading space: {line!r}'
+
 
 # ── format_speaker_attributions ───────────────────────────────────────────────
+
+def test_indented_notes_attributions_and_discussion_block():
+    # Simulate a pad where the notetaker indented everything with spaces.
+    # After strip_artifacts the spaces are gone, so attributions and
+    # DiscussionItem params must be handled correctly by later transforms.
+    raw = (
+        '    == 3: NFC tags ==\n'
+        '    Naomi: i have a stack of NFC tags you can scan\n'
+        '\n'
+        '    Newman: definitely, ok let\'s close this one down.\n'
+        '\n'
+        '    == 4: elevator / ADA ==\n'
+        '    {{DiscussionItem|\n'
+        '     | topic = elevator / ADA\n'
+        '     | raised_by = Khalila\n'
+        '     | seeking = consensus\n'
+        '    }}\n'
+    )
+    cleaned = strip_artifacts(raw)
+    # No leading spaces remain
+    for line in cleaned.splitlines():
+        assert not line.startswith(' '), f'leading space left in: {line!r}'
+
+    # Attributions format correctly after de-indentation
+    attributed = format_speaker_attributions(cleaned)
+    assert "'''Naomi:'''" in attributed
+    assert "'''Newman:'''" in attributed
+
+    # DiscussionItem block closes properly after de-indentation
+    fixed = fix_discussion_item_blocks(cleaned)
+    assert '{{DiscussionItem|' in fixed
+    assert '}}' in fixed
+    assert '| topic = elevator / ADA' in fixed
+
 
 def test_formats_colon_attribution():
     text = '= Discussion Items =\n* Alice: said something\n'

@@ -346,6 +346,13 @@ def strip_artifacts(raw_text: str, date_str: str = None) -> str:
     # Strip HTML comments before line processing (handles multi-line comments)
     raw_text = strip_html_comments(raw_text)
 
+    # Strip leading spaces from all lines early — notetakers sometimes paste
+    # content with deep indentation. MediaWiki renders leading-space lines as
+    # <pre> blocks, and downstream transforms (fix_metadata_table,
+    # fix_discussion_item_blocks) rely on ^| / ^! / ^= anchors that break on
+    # indented text.
+    raw_text = re.sub(r'^ +', '', raw_text, flags=re.MULTILINE)
+
     # Fix metadata placeholders if we know the date
     if date_str:
         raw_text = fix_date_metadata(raw_text, date_str)
@@ -563,9 +570,6 @@ def format_speaker_attributions(text: str) -> str:
 
     Leading spaces are stripped globally to prevent MediaWiki <pre> boxes.
     """
-    # Strip leading spaces from ALL lines globally (prevents <pre> boxes everywhere)
-    text = re.sub(r'^ +', '', text, flags=re.MULTILINE)
-
     # Name pattern: the first word may start with a lower- OR upper-case letter
     # (handles lowercase handles like "naomi:", "jc:"), but any *subsequent* word
     # must still start with a capital. Keeping the continuation capitalized means
