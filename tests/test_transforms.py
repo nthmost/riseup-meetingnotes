@@ -178,11 +178,15 @@ def test_strip_artifacts_collapses_blank_lines():
     result = strip_artifacts(text)
     assert '\n\n\n' not in result
 
-def test_strip_artifacts_strips_leading_spaces():
-    text = '    == Discussion Items ==\n    * Naomi: hello\n    {{DiscussionItem|\n     | topic = foo\n    }}\n'
-    result = strip_artifacts(text)
-    for line in result.splitlines():
-        assert not line.startswith(' '), f'line still has leading space: {line!r}'
+def test_strip_artifacts_strips_leading_whitespace():
+    # Both spaces and tabs must be stripped — Riseup pads often produce tab-indented output.
+    # A leading tab before * or = breaks MediaWiki bullet/header markup entirely.
+    space_text = '    == Discussion Items ==\n    * Naomi: hello\n'
+    tab_text = '\t== Discussion Items ==\n\t* Naomi: hello\n\t| param = value\n'
+    for text in (space_text, tab_text):
+        result = strip_artifacts(text)
+        for line in result.splitlines():
+            assert not line[0:1] in (' ', '\t'), f'leading whitespace left in: {line!r}'
 
 
 # ── format_speaker_attributions ───────────────────────────────────────────────

@@ -346,12 +346,12 @@ def strip_artifacts(raw_text: str, date_str: str = None) -> str:
     # Strip HTML comments before line processing (handles multi-line comments)
     raw_text = strip_html_comments(raw_text)
 
-    # Strip leading spaces from all lines early — notetakers sometimes paste
-    # content with deep indentation. MediaWiki renders leading-space lines as
-    # <pre> blocks, and downstream transforms (fix_metadata_table,
-    # fix_discussion_item_blocks) rely on ^| / ^! / ^= anchors that break on
-    # indented text.
-    raw_text = re.sub(r'^ +', '', raw_text, flags=re.MULTILINE)
+    # Strip leading tabs and spaces from all lines early — notetakers sometimes
+    # paste content with deep indentation (spaces or tabs from a Riseup pad).
+    # MediaWiki renders leading-space lines as <pre> blocks; leading-tab lines
+    # break bullet/header markup entirely. Downstream transforms also rely on
+    # ^| / ^! / ^= anchors that break on indented text.
+    raw_text = re.sub(r'^[\t ]+', '', raw_text, flags=re.MULTILINE)
 
     # Fix metadata placeholders if we know the date
     if date_str:
