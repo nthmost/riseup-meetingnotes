@@ -21,7 +21,6 @@ import logging
 import re
 import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,37 +60,25 @@ class PipelineInput:
 
 
 def _resolve_from_parent(parent_txn_id: int, flags: dict) -> PipelineInput:
-    """Re-run: prefer current wiki revision as input, fall back to parent's output file."""
+    """Re-run: always use the original raw pad capture as input.
+
+    Previously this fetched the published wiki page or parent output file,
+    meaning the pipeline re-processed already-processed text. Re-run exists
+    to apply pipeline fixes to the original source, so we use the raw capture.
+    """
     parent = db.get_transformation(parent_txn_id)
     if not parent:
         raise RuntimeError(f"Parent transformation {parent_txn_id} not found")
     capture_id = parent['raw_capture_id']
     flags = {**flags, 'generate_ai_summary': False}
 
-    published_page = db.get_published_page_for_capture(capture_id)
-    if published_page:
-        wiki_content, revid = fetch.fetch_wiki_page(published_page)
-        if wiki_content is not None:
-            with tempfile.NamedTemporaryFile(
-                suffix='.wiki', mode='w', encoding='utf-8', delete=False
-            ) as f:
-                f.write(wiki_content)
-                tmp_path = Path(f.name)
-            log.info(f"[run] using wiki revid={revid} ({len(wiki_content)} bytes)")
-            return PipelineInput(
-                capture_id=capture_id,
-                raw_path=tmp_path,
-                content=wiki_content,
-                flags=flags,
-                source_wiki_page=published_page,
-                source_wiki_revid=revid,
-                _tmp_path=tmp_path,
-            )
-        log.info(f"[run] wiki page {published_page} not found, falling back to parent output")
-
-    if not parent['output_path'] or not Path(parent['output_path']).exists():
-        raise RuntimeError("No wiki content and no parent output file available")
-    raw_path = Path(parent['output_path'])
+    capture = db.get_capture_by_id(capture_id)
+    if not capture:
+        raise RuntimeError(f"Raw capture {capture_id} not found")
+    raw_path = Path(capture['file_path'])
+    if not raw_path.exists():
+        raise RuntimeError(f"Raw capture file missing: {raw_path}")
+    log.info(f"[run] rerun using raw capture id={capture_id} ({raw_path.name})")
     return PipelineInput(
         capture_id=capture_id,
         raw_path=raw_path,

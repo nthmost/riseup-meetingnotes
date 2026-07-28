@@ -204,7 +204,10 @@ def test_run_pipeline_dry_run(tmp_path):
         assert list(tmp_path.glob('*.wiki')) == []
 
 
-def test_run_pipeline_rerun_uses_parent_output(tmp_path):
+def test_run_pipeline_rerun_uses_raw_capture(tmp_path):
+    # Re-run must process the original raw capture, not the previously-processed output.
+    # This ensures pipeline fixes (e.g. indentation handling) are applied to the
+    # original source text, not to already-transformed content.
     raw = tmp_path / 'raw.txt'
     raw.write_text('original notes')
     parent_out = tmp_path / 'parent_output.wiki'
@@ -234,8 +237,8 @@ def test_run_pipeline_rerun_uses_parent_output(tmp_path):
             out_dir=tmp_path,
         )
         txn = db.get_transformation(txn_id)
-        # Content comes from parent output, not the raw file
-        assert Path(txn['output_path']).read_text() == 'parent processed output'
-        # generate_ai_summary must be False for reruns (wiki content already has summary)
+        # Content comes from the raw capture, not the previously-processed output
+        assert Path(txn['output_path']).read_text() == 'original notes'
+        # generate_ai_summary must be False for reruns
         import json
         assert json.loads(txn['flags'])['generate_ai_summary'] is False
