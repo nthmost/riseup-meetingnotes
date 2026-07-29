@@ -90,6 +90,25 @@ A character-level state machine handles three cases:
   removed, but multi-line mode is *not* entered. This prevents a typo'd
   comment from accidentally eating the next section of real content.
 
+### 2b2. Strip leading whitespace
+
+Every line has its leading tabs and spaces removed immediately after the
+HTML-comment pass. This is essential for Riseup Pad exports: the pad wraps
+its entire content in a one-level tab indent, so every line — headers,
+bullets, template parameters, section markers — arrives as `\t== Heading ==`
+or `\t* bullet` rather than `== Heading ==` or `* bullet`.
+
+Why this matters:
+- MediaWiki renders any line that starts with a space (or tab) as a
+  `<pre>` code block, so indented bullets and section headers render as
+  raw preformatted text instead of wiki markup.
+- Downstream transforms use `^|`, `^!`, and `^=` anchors that only match
+  at the real start of a line — they silently fail on indented input.
+
+Both spaces *and* tabs are stripped (`[\t ]+`). The strip happens before any
+per-line rule evaluation, so artifact-removal rules work correctly regardless
+of how deeply the pad indented the content.
+
 ### 2c. Fix date metadata
 
 The template contains a placeholder like `| 2026 mm dd  UPDATE DATE` in
@@ -128,6 +147,11 @@ substitutes the real topic name:
 ```
 == 1: Budget for new laser cutter ==
 ```
+
+If the topic value still has template angle-bracket wrapping (see Stage 5b),
+it is stripped before substitution, so `| topic = <Budget for laser cutter>`
+produces `== 1: Budget for laser cutter ==`, not
+`== 1: <Budget for laser cutter> ==`.
 
 For `[num]`, it counts the already-resolved numbered headers above to determine
 the correct sequence number.
@@ -251,6 +275,38 @@ Rules:
 
 ---
 
+## Stage 5b — Strip angle-bracket placeholders
+
+The meeting template uses angle brackets as fill-in-the-blank cues for
+`{{DiscussionItem}}` parameters:
+
+```
+{{DiscussionItem|
+ | topic = <Music Room Etiquette/Cleanup>
+ | raised_by = <Lucifer>
+ | seeking = decision/outcome/advice/[?]
+}}
+```
+
+Notetakers fill in the values but sometimes forget to remove the brackets.
+This stage strips the `<...>` wrapper when it is the *entire* value on a
+parameter line:
+
+```
+{{DiscussionItem|
+ | topic = Music Room Etiquette/Cleanup
+ | raised_by = Lucifer
+ | seeking = decision/outcome/advice/[?]
+}}
+```
+
+The rule fires only when `<...>` is the complete value — a URL or partial
+wrap like `| notes = see <http://...> for details` is left untouched.
+The same unwrapping is applied when the topic value is extracted for header
+substitution in Stage 2e.
+
+---
+
 ## Stage 6 — Fix Discussion Item blocks
 
 The newer meeting template uses `{{DiscussionItem|...}}` template blocks:
@@ -326,6 +382,8 @@ attribution styles vary widely by notetaker:
 * Carol- what's the budget?
 - Dave: we have $2,000 in the equipment fund
 Erin: I can look into prices
+Heather -equipment damage, someone left a bag on the violin
+WHeezy - thank you for taking initiative
 ```
 
 All of these are converted to MediaWiki bold attribution style:
@@ -336,26 +394,80 @@ All of these are converted to MediaWiki bold attribution style:
 '''Carol:''' what's the budget?
 '''Dave:''' we have $2,000 in the equipment fund
 '''Erin:''' I can look into prices
+'''Heather:''' equipment damage, someone left a bag on the violin
+'''WHeezy:''' thank you for taking initiative
 ```
 
-The name pattern requires each word to start with a capital letter (preventing
-`Action item:` or `Width: 67` from being treated as speaker attributions).
-Names may include up to four words plus an optional parenthetical qualifier
-(`Daniel (solderfumes)`, `Alice (she/her)`).
+### Colon patterns — multi-word names OK
 
-**Protected sections**: The `= Introductions =` and `= Short announcements and
-events =` sections are excluded from attribution conversion. Intros are
-structured differently (they *are* the bullet content, not dialogue). The
-`== [[Membership]] ==` subsection is also excluded for the same reason.
+Colon-based attribution (`Name:` or `* Name:`) is recognised for names up
+to four words, where the first word may be any case and subsequent words must
+start with a capital. A trailing parenthetical qualifier is also accepted
+(`Daniel (solderfumes):`, `Alice (she/her):`).
 
-**Discussion Items spacing**: Within the `= Discussion Items =` section,
-blank lines are ensured before and after each attribution line. This makes
-MediaWiki render each speaker as their own paragraph rather than running
-everything together.
+```
+* naomi: said something           →  '''naomi:''' said something
+* Daniel (web): fixed the printer →  '''Daniel (web):''' fixed the printer
+```
 
-Leading spaces are stripped from all lines globally — indented lines render
-as `<pre>` blocks in MediaWiki, which is almost never what the notetaker
-intended.
+### Dash patterns — single-word names only
+
+Dash-based attribution (`Name -`, `Name -`, `Name-`) is restricted to
+**single-word names** (plus an optional qualifier in parens). This avoids
+false positives on natural sentence dashes:
+
+```
+Heather - equipment damage        →  '''Heather:''' equipment damage  ✓
+Heather -equipment damage         →  '''Heather:''' equipment damage  ✓  (space before, none after)
+Heather- equipment damage         →  '''Heather:''' equipment damage  ✓  (none before, space after)
+Music Room - needs cleanup        →  (unchanged — two-word name, left alone)
+```
+
+The three spacing variants handled:
+
+| Input pattern | Example |
+|---|---|
+| `Name - text` | `Nixxy - In the wood shop` |
+| `Name -text` | `Heather -equipment damage` |
+| `Name- text` | `Carol- what's the budget?` |
+
+A lone `Name-text` (no spaces anywhere) is *not* treated as attribution —
+it looks indistinguishable from a hyphenated word at the start of a sentence.
+
+### Denylist
+
+Common single-word labels that look syntactically like names are blocked
+from attribution: `note`, `notes`, `todo`, `action`, `update`, `status`,
+`fyi`, `tldr`, `summary`, `agenda`, `topic`, `decision`, `aside`, and a
+few others. The check is case-insensitive, so `NOTE:` is also blocked.
+A real name that merely *starts with* a denylist word (e.g. `Noteworthy:`)
+is unaffected — the full word must match.
+
+### Protected sections
+
+The `= Introductions =` and `= Short announcements and events =` sections
+are excluded from attribution conversion entirely. These sections contain
+intro blurbs and announcements formatted as bullet lists, not speaker
+dialogue. The `== [[Membership]] ==` subsection is also excluded.
+
+### Blank-line insertion
+
+After attribution conversion, blank lines are ensured before and after every
+attribution line throughout the document. This means consecutive attributions
+that notetakers wrote without blank lines between them — common when notes
+are rushed — are automatically separated so MediaWiki renders each speaker as
+their own paragraph rather than running them together as one block of text.
+
+```
+Heather -equipment damage
+Nixxy - In the wood shop
+
+→
+
+'''Heather:''' equipment damage
+
+'''Nixxy:''' In the wood shop
+```
 
 ---
 
@@ -390,17 +502,19 @@ to be pasted or published.
 what each stage did, showing line counts before and after:
 
 ```markdown
-| Step                        | Lines in | Lines out | Δ   | Note                                          |
-|-----------------------------|----------|-----------|-----|-----------------------------------------------|
-| strip_artifacts             | 350      | 312       | -38 |                                               |
-| fix_meeting_number          | 312      | 312       | 0   | resolved to 859th                             |
-| generate_summary            | 312      | 321       | +9  | model=claude-haiku-4-5-20251001, 1205/312 tok |
-| fix_ordered_lists           | 321      | 318       | -3  |                                               |
-| fix_discussion_item_blocks  | 318      | 316       | -2  |                                               |
-| format_task_board           | 316      | 322       | +6  |                                               |
-| format_speaker_attributions | 322      | 322       | 0   | 47 attribution lines in output                |
-| ensure_bullets              | 322      | 324       | +2  |                                               |
-| add_footer                  | 324      | 326       | +2  | {{meetings2026}} banner + [[Category:Meeting Notes]] |
+| Step                              | Lines in | Lines out | Δ   | Note                                          |
+|-----------------------------------|----------|-----------|-----|-----------------------------------------------|
+| strip_artifacts                   | 350      | 312       | -38 |                                               |
+| fix_meeting_number                | 312      | 312       | 0   | resolved to 859th                             |
+| fix_metadata_table                | 312      | 312       | 0   |                                               |
+| generate_summary                  | 312      | 312       | 0   | model=claude-haiku-4-5-20251001, 1205/312 tok |
+| fix_ordered_lists                 | 312      | 309       | -3  |                                               |
+| strip_angle_bracket_placeholders  | 309      | 309       | 0   |                                               |
+| fix_discussion_item_blocks        | 309      | 307       | -2  |                                               |
+| format_task_board                 | 307      | 313       | +6  |                                               |
+| format_speaker_attributions       | 313      | 313       | 0   | 47 attribution lines in output                |
+| ensure_bullets                    | 313      | 315       | +2  |                                               |
+| add_footer                        | 315      | 317       | +2  | {{meetings2026}} banner + [[Category:Meeting Notes]] |
 ```
 
 ---

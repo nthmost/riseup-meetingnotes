@@ -16,14 +16,16 @@ Riseup Pad
     ▼ fetch
 raw .txt (archived, immutable)
     │
-    ▼ strip_artifacts       — remove template boilerplate lines
-    ▼ fix_meeting_number    — resolve ordinal from previous wiki page
-    ▼ fix_ordered_lists     — 1. 2. 3. → MediaWiki # lists
-    ▼ fix_discussion_blocks — pull content out of {{DiscussionItem}} templates
-    ▼ format_task_board     — task bullets → wikitable
-    ▼ format_attributions   — "Name: text" → '''Name:''' text
-    ▼ ensure_bullets        — bullet-ify Introductions / Short announcements
-    ▼ add_footer            — {{meetings2026}} banner + [[Category:Meeting Notes]]
+    ▼ strip_artifacts           — strip leading whitespace; remove template boilerplate
+    ▼ fix_meeting_number        — resolve ordinal from previous wiki page
+    ▼ fix_metadata_table        — fix Note-taker / Moderator row formatting
+    ▼ fix_ordered_lists         — 1. 2. 3. → MediaWiki # lists
+    ▼ strip_angle_brackets      — remove <...> wrappers from DiscussionItem params
+    ▼ fix_discussion_blocks     — pull content out of {{DiscussionItem}} templates
+    ▼ format_task_board         — task bullets → wikitable
+    ▼ format_attributions       — "Name: text" / "Name - text" → '''Name:''' text
+    ▼ ensure_bullets            — bullet-ify Introductions / Short announcements
+    ▼ add_footer                — {{meetings2026}} banner + [[Category:Meeting Notes]]
     │
     ├─► (optional) Generate Summary
     │       │
@@ -42,9 +44,9 @@ Noisebridge wiki  (Meeting_Notes_YYYY_MM_DD)
 language, typos, and bracketed asides are never modified. Only template
 instruction lines left by notetakers are removed.
 
-**Re-run behaviour**: re-runs chain from the current wiki revision (not the
-original raw pad), so human edits made directly on the wiki are preserved and
-built upon rather than overwritten.
+**Re-run behaviour**: re-runs always process the original raw pad capture,
+not a previously-processed output. This ensures pipeline fixes are applied
+to the unmodified source text rather than to already-transformed content.
 
 ---
 
@@ -229,7 +231,7 @@ python -m pipeline.run --date 2026_04_15 --dry-run
 # Archive raw pad content only, no processing
 python -m pipeline.run --date 2026_04_15 --fetch-only
 
-# Re-run from a previous transformation (chains from wiki revision)
+# Re-run from a previous transformation (re-processes original raw capture)
 python -m pipeline.run --date 2026_04_15 --rerun <txn_id>
 ```
 
@@ -241,7 +243,7 @@ python -m pipeline.run --date 2026_04_15 --rerun <txn_id>
 pytest tests/ -v
 ```
 
-59 tests, ~0.4 s. No network calls, no AI calls, no subprocess — pure
+73 tests, ~0.2 s. No network calls, no AI calls, no subprocess — pure
 in-memory SQLite and the `passthrough_processor`. Includes architectural
 tests that enforce the LLM/non-LLM module boundary. See `AGENTS.md` for
 development standards.
