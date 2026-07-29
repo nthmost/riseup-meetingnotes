@@ -13,6 +13,7 @@ from transforms import (
     fix_date_metadata,
     fix_metadata_table,
     fix_discussion_item_blocks,
+    strip_angle_bracket_placeholders,
     insert_summary,
     ensure_bullets,
     _ordinal,
@@ -177,6 +178,35 @@ def test_strip_artifacts_collapses_blank_lines():
     text = 'line one\n\n\n\nline two'
     result = strip_artifacts(text)
     assert '\n\n\n' not in result
+
+# ── strip_angle_bracket_placeholders ─────────────────────────────────────────
+
+def test_strips_angle_brackets_from_param_value():
+    text = '| topic = <Music Room Etiquette/Cleanup >\n| raised_by = <Lucifer>\n'
+    result = strip_angle_bracket_placeholders(text)
+    assert '| topic = Music Room Etiquette/Cleanup' in result
+    assert '| raised_by = Lucifer' in result
+    assert '<' not in result
+
+def test_leaves_partial_angle_brackets_alone():
+    # Only strips when <...> is the entire value — not inline URLs or partial wraps
+    text = '| seeking = decision/outcome/advice/[?]\n'
+    result = strip_angle_bracket_placeholders(text)
+    assert result == text
+
+def test_fix_topic_headers_strips_angle_brackets_from_topic():
+    lines = [
+        '== [num]: [topic-short] ==',
+        '{{DiscussionItem|',
+        '| topic = <Music Room Etiquette/Cleanup >',
+        '| raised_by = <Lucifer>',
+        '}}',
+    ]
+    result = fix_topic_headers(lines)
+    assert result[0] == '== 1: Music Room Etiquette/Cleanup =='
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def test_strip_artifacts_strips_leading_whitespace():
     # Both spaces and tabs must be stripped — Riseup pads often produce tab-indented output.

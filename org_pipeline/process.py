@@ -27,6 +27,7 @@ load_dotenv(Path(__file__).parent / '.env')
 from ai import generate_summary
 from transforms import (
     strip_artifacts, fix_metadata_table, fix_discussion_item_blocks,
+    strip_angle_bracket_placeholders,
     format_speaker_attributions, format_task_board, fix_ordered_lists,
     ensure_bullets, insert_summary, _ordinal,
 )
@@ -164,6 +165,7 @@ def process(raw_text: str, date_str: str = None,
       3. fix_metadata_table      — fix Note-taker/Moderator row formatting
       4. generate_summary        — AI generates Meeting Summary (stored for review, not inserted)
       5. fix_ordered_lists       — convert 1. 2. 3. to MediaWiki # lists
+      5b. strip_angle_bracket_placeholders — strip <...> from template param values
       6. fix_discussion_item_blocks — pull content out of {{DiscussionItem}} templates
       7. format_task_board       — convert task bullet list to wikitable
       8. format_speaker_attributions — reformat "Name: text" to '''Name:''' text
@@ -232,6 +234,8 @@ def process(raw_text: str, date_str: str = None,
 
     # 5–9. Deterministic transforms
     cleaned = _record('fix_ordered_lists', cleaned, fix_ordered_lists(cleaned))
+    cleaned = _record('strip_angle_bracket_placeholders', cleaned,
+                      strip_angle_bracket_placeholders(cleaned))
     cleaned = _record('fix_discussion_item_blocks', cleaned, fix_discussion_item_blocks(cleaned))
     cleaned = _record('format_task_board', cleaned, format_task_board(cleaned))
 

@@ -237,11 +237,11 @@ def fix_topic_headers(lines: list) -> list:
             # Old format: On topic: ...
             m = re.match(r'^\s*On topic:\s*(.+)', lines[j])
             if m:
-                return m.group(1).strip()
+                return _unwrap_angle_brackets(m.group(1).strip())
             # New format: | topic = ... inside a {{DiscussionItem}} block
             m = re.match(r'^\s*\|\s*topic\s*=\s*(.+)', lines[j])
             if m:
-                return m.group(1).strip()
+                return _unwrap_angle_brackets(m.group(1).strip())
         return None
 
     result = []
@@ -553,6 +553,33 @@ def fix_discussion_item_blocks(text: str) -> str:
     text = unclosed_pattern.sub(close_unclosed, text)
 
     return text
+
+
+def _unwrap_angle_brackets(s: str) -> str:
+    """If s is entirely wrapped in <...>, return the inner content stripped."""
+    m = re.match(r'^<([^>]+)>\s*$', s)
+    return m.group(1).strip() if m else s
+
+
+def strip_angle_bracket_placeholders(text: str) -> str:
+    """
+    Strip <...> placeholder wrappers from template parameter values.
+
+    The meeting template uses angle brackets as fill-in-the-blank cues.
+    Notetakers fill in the content but sometimes leave the brackets:
+
+      | topic = <Music Room Etiquette/Cleanup >  →  | topic = Music Room Etiquette/Cleanup
+      | raised_by = <Lucifer>                    →  | raised_by = Lucifer
+
+    Only fires when <...> is the entire value on the line; partial wrapping
+    (e.g. "see <http://...> for details") is left untouched.
+    """
+    return re.sub(
+        r'^(\s*\|[^=\n]+=\s*)<([^>\n]+)>\s*$',
+        lambda m: m.group(1) + m.group(2).strip(),
+        text,
+        flags=re.MULTILINE,
+    )
 
 
 def format_speaker_attributions(text: str) -> str:
