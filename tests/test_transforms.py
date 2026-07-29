@@ -305,6 +305,37 @@ def test_skips_introductions_section():
     # Carol's line is in Introductions — should NOT be reformatted
     assert "* Carol: intro blurb" in result
 
+def test_formats_bare_dash_space_before_no_space_after():
+    # "Heather -equipment" pattern — space before dash, no space after
+    text = '= Discussion Items =\nHeather -equipment damage\n'
+    result = format_speaker_attributions(text)
+    assert "'''Heather:'''" in result
+
+def test_formats_bare_dash_no_space_before():
+    # "Name- text" pattern — no space before dash, space after
+    text = '= Discussion Items =\nNixxy- In the wood shop\n'
+    result = format_speaker_attributions(text)
+    assert "'''Nixxy:'''" in result
+
+def test_multiword_dash_not_attributed():
+    # Multi-word + dash must NOT be treated as attribution
+    text = '= Discussion Items =\nMusic Room - needs cleanup\n'
+    result = format_speaker_attributions(text)
+    assert "'''" not in result
+    assert 'Music Room - needs cleanup' in result
+
+def test_blank_lines_inserted_between_unspaced_attributions():
+    # Notetakers who don't double-space between attributions should still get
+    # blank lines inserted so MediaWiki renders each as a separate paragraph.
+    text = '= Discussion Items =\nHeather -equipment damage\nNixxy - In the wood shop\nJulius - We should exercise\n'
+    result = format_speaker_attributions(text)
+    assert "'''Heather:'''" in result
+    assert "'''Nixxy:'''" in result
+    assert "'''Julius:'''" in result
+    # Each attribution must be separated by a blank line
+    assert "'''Heather:''' equipment damage\n\n'''Nixxy:'''" in result
+    assert "'''Nixxy:''' In the wood shop\n\n'''Julius:'''" in result
+
 def test_blank_lines_between_attributions_any_section():
     # Attributions in any section (e.g. Kudos) should be separated by blank lines
     text = '= Brief Kudos =\n* Alice: fixed the laser\n* Bob: helped a new person\n'

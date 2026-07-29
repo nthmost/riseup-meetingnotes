@@ -590,7 +590,14 @@ def format_speaker_attributions(text: str) -> str:
       * Name: text       →  '''Name:''' text
       * Name - text      →  '''Name:''' text
       * Name- text       →  '''Name:''' text
+      * Name -text       →  '''Name:''' text   (space before dash, none after)
       - Name: text       →  '''Name:''' text   (dash prefix, e.g. in Excellence)
+      Name -text         →  '''Name:''' text   (bare line, space before dash)
+      Name- text         →  '''Name:''' text   (bare line, no space before dash)
+
+    Dash patterns are restricted to single-word names to avoid false positives
+    on natural sentence dashes ("Music Room - needs cleanup").
+    Colon patterns allow multi-word names.
 
     The Introductions and Short announcements sections are protected from
     attribution conversion (they contain intro blurbs, not speaker exchanges).
@@ -620,6 +627,10 @@ def format_speaker_attributions(text: str) -> str:
     )
     not_label_word = r'(?!(?i:' + '|'.join(label_words) + r')[^\S\n]*[-:])'
     name = not_label_word + r'([A-Za-z][a-zA-Z0-9\'/]*(?:[^\S\n]+[A-Z][a-zA-Z0-9\'/]*){0,3}(?:[^\S\n]+\([^)]+\))?)'
+    # Single-word variant used for dash patterns — avoids false positives on natural
+    # sentence dashes like "The shelf — already cracked — collapsed."
+    # One word + optional qualifier in parens, e.g. "Heather", "Daniel (web)".
+    sw = not_label_word + r'([A-Za-z][a-zA-Z0-9\'/]*(?:[^\S\n]+\([^)]+\))?)'
     no_label = r'(?!\d)(?![A-Za-z][a-z]+:)'
     # Use [^\S\n]+ (non-newline whitespace) for trailing space after - or :
     # This prevents patterns from consuming newlines and merging lines.
@@ -628,18 +639,22 @@ def format_speaker_attributions(text: str) -> str:
     def apply_attributions(s: str) -> str:
         # optional non-newline whitespace before the colon handles "Name :" typo
         osp = r'[^\S\n]*'
-        # * Name: text  (bullet + colon, optional space before colon)
+        # * Name: text  (bullet + colon, optional space before colon) — multi-word OK
         s = re.sub(rf'^\*{sp}{name}{osp}:{sp}{no_label}', r"'''\1:''' ", s, flags=re.MULTILINE)
-        # * Name - text  (bullet + space-dash-space)
-        s = re.sub(rf'^\*{sp}{name}{sp}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
-        # * Name- text  (bullet + no-space-dash)
-        s = re.sub(rf'^\*{sp}{name}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
+        # * Name - text / * Name -text  (bullet + space before dash, single-word)
+        s = re.sub(rf'^\*{sp}{sw}{sp}-{osp}(?=\S)', r"'''\1:''' ", s, flags=re.MULTILINE)
+        # * Name- text  (bullet + no-space-before-dash, single-word)
+        s = re.sub(rf'^\*{sp}{sw}{osp}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
         # - Name: text  (leading dash, e.g. Excellence section; optional space before colon)
         s = re.sub(rf'^-{sp}{name}{osp}:{sp}{no_label}', r"'''\1:''' ", s, flags=re.MULTILINE)
-        # Bare "Name: text" line (optional space before colon)
+        # Bare "Name: text" line (optional space before colon) — multi-word OK
         s = re.sub(rf'^{name}{osp}:{sp}{no_label}', r"'''\1:''' ", s, flags=re.MULTILINE)
-        # Bare "Name - text" line
-        s = re.sub(rf'^{name}{sp}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
+        # Bare "Name - text"  (space before and after dash, single-word)
+        s = re.sub(rf'^{sw}{sp}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
+        # Bare "Name -text"  (space before dash, text immediately after, single-word)
+        s = re.sub(rf'^{sw}{sp}-(?=\S)', r"'''\1:''' ", s, flags=re.MULTILINE)
+        # Bare "Name- text"  (no space before dash, space after, single-word)
+        s = re.sub(rf'^{sw}{osp}-{sp}', r"'''\1:''' ", s, flags=re.MULTILINE)
         return s
 
     # Protect Introductions and Short announcements sections using placeholders.
