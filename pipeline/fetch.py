@@ -37,13 +37,27 @@ def archive_raw(meeting_date: str, content: str, source: str) -> tuple[Path, int
     path.chmod(0o444)
 
     sha256 = hashlib.sha256(content.encode('utf-8')).hexdigest()
+    captured_at = datetime.now(timezone.utc).isoformat()
+    size_bytes = len(content.encode('utf-8'))
     capture_id = db.insert_capture(
         meeting_date=meeting_date,
-        captured_at=datetime.now(timezone.utc).isoformat(),
+        captured_at=captured_at,
         source_url=source,
         file_path=path,
         sha256=sha256,
-        size_bytes=len(content.encode('utf-8')),
+        size_bytes=size_bytes,
+    )
+    # Seed the version history with the initial fetch. The snapshot points at
+    # the live file (no copy); later revisions get their own archived snapshot.
+    db.insert_raw_revision(
+        raw_capture_id=capture_id,
+        created_at=captured_at,
+        source='initial_fetch',
+        author=None,
+        note=None,
+        snapshot_path=path,
+        sha256=sha256,
+        size_bytes=size_bytes,
     )
     return path, capture_id
 

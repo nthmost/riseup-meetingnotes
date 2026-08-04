@@ -58,13 +58,18 @@ In practice, cleanup rarely happens. That's what this pipeline is for.
 as a read-only `.txt` file. This is the permanent record of what was on the pad
 at the time of capture.
 
-**Why read-only**: The raw file is never modified after capture. If the pipeline
-produces bad output, you can always re-run from the original. If the pad changes
-after the meeting (late edits, corrections), a refresh operation backs up the
-old file before overwriting.
+**Why read-only**: The live raw file is only ever changed through a versioned
+path — a pad refresh, or a human edit in the web UI (**Edit Raw**). Before any
+change, the outgoing content is archived as an immutable read-only snapshot, so
+you can always re-run from — or restore — any earlier version. Human editing
+exists to fix source-level disasters (e.g. notes written with the wrong
+template) and works even after the notes have been published.
 
-**What's stored**: File path, SHA-256 hash, byte size, capture timestamp, and
-source URL — all in the `raw_captures` table in the provenance database.
+**What's stored**: The current file path, SHA-256 hash, byte size, capture
+timestamp, and source URL live in `raw_captures`. Every version of the raw
+content — the initial fetch plus every refresh, edit, and restore — is recorded
+in the `raw_revisions` table (source, author, reason, snapshot path, SHA, size)
+with a corresponding archived snapshot on disk.
 
 ---
 

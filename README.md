@@ -14,7 +14,7 @@ Originally built for [Noisebridge](https://www.noisebridge.net). Adapt `org_pipe
 Riseup Pad
     │
     ▼ fetch
-raw .txt (archived, immutable)
+raw .txt (archived + versioned; human-editable)
     │
     ▼ strip_artifacts           — strip leading whitespace; remove template boilerplate
     ▼ fix_meeting_number        — resolve ordinal from previous wiki page
@@ -44,9 +44,10 @@ Noisebridge wiki  (Meeting_Notes_YYYY_MM_DD)
 language, typos, and bracketed asides are never modified. Only template
 instruction lines left by notetakers are removed.
 
-**Re-run behaviour**: re-runs always process the original raw pad capture,
-not a previously-processed output. This ensures pipeline fixes are applied
-to the unmodified source text rather than to already-transformed content.
+**Re-run behaviour**: re-runs always process the current raw capture (the
+original pad text, or a human-edited version of it), never a previously-
+processed output. This ensures pipeline fixes are applied to the source text
+rather than to already-transformed content.
 
 ---
 
@@ -107,8 +108,16 @@ wiki.py                     MediaWiki API client (login + edit, 429 retry).
 
 Three core tables in `provenance.db`:
 
-**`raw_captures`** — one row per meeting date. Points to the immutable raw
-`.txt` file on disk. Never overwritten; a refresh creates a backup first.
+**`raw_captures`** — one row per meeting date. Points to the current raw
+`.txt` file on disk. The live file may change (pad refresh or a human edit),
+but every version is preserved in `raw_revisions`.
+
+**`raw_revisions`** — full version history of each capture's raw content. One
+row per version — initial fetch, pad refresh, human edit, restore — each
+archiving an immutable read-only snapshot plus SHA, size, author, and reason.
+Humans can edit the raw notes in the web UI (**Edit Raw**) to fix source-level
+disasters (e.g. notes written with the wrong template); any prior version can
+be restored, which itself records a new revision so nothing is ever destroyed.
 
 **`transformations`** — every pipeline pass, forming a lineage tree per
 capture. Each row records: parent pass, input SHA, output path, output SHA,

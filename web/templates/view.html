@@ -147,6 +147,19 @@
 {% block body %}
 <div class="outer">
 
+  {% if request.args.get('edited') or request.args.get('restored') %}
+  <div class="win-window" style="flex-shrink:0; background:#e0ffe0;">
+    <div style="padding:8px 12px; font-family:monospace; font-size:12px;">
+      {% if request.args.get('restored') %}
+        ✔ Restored raw revision #{{ request.args.get('restored') }} as the current raw notes.
+      {% else %}
+        ✔ Raw notes saved as a new revision.
+      {% endif %}
+      Re-run the pipeline to regenerate the processed output from the updated raw.
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Top toolbar -->
   <div class="win-window" style="flex-shrink:0;">
     <div class="win-titlebar">
@@ -179,6 +192,9 @@
     <div class="win-toolbar">
       <a href="/"><button class="win-btn">◀ Back</button></a>
       <a href="/raw/{{ capture.meeting_date }}"><button class="win-btn">📄 Raw TXT</button></a>
+      {% if current_user %}
+      <a href="/edit/{{ capture.meeting_date }}"><button class="win-btn" title="Edit the raw notes (versioned)">✏ Edit Raw</button></a>
+      {% endif %}
       <a href="/history/{{ capture.meeting_date }}"><button class="win-btn">📋 History ({{ all_txns|length }})</button></a>
       <div class="win-toolbar-sep"></div>
       {% if all_txns|length > 1 %}

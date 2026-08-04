@@ -160,6 +160,26 @@ def init():
             -- is the baseline, not a change). New revids start at 0 until acknowledged.
             acknowledged  INTEGER NOT NULL DEFAULT 0
         );
+
+        -- Full version history of each capture's raw content. One row per
+        -- version: the initial fetch, every pad refresh, every human edit, and
+        -- every restore. Each row archives an immutable snapshot of that
+        -- version's content so any prior state can be inspected or restored.
+        CREATE TABLE IF NOT EXISTS raw_revisions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            raw_capture_id INTEGER NOT NULL REFERENCES raw_captures(id),
+            created_at     TEXT    NOT NULL,          -- ISO-8601 UTC
+            source         TEXT    NOT NULL
+                             CHECK(source IN ('initial_fetch','pad_refresh','human_edit','restore')),
+            author         TEXT,                       -- wiki username; NULL for automated
+            note           TEXT,                       -- optional reason
+            snapshot_path  TEXT    NOT NULL,           -- absolute path to this revision's archived content
+            sha256         TEXT    NOT NULL,
+            size_bytes     INTEGER NOT NULL,
+            restored_from  INTEGER REFERENCES raw_revisions(id)  -- set when source='restore'
+        );
+        CREATE INDEX IF NOT EXISTS idx_rawrev_capture
+            ON raw_revisions(raw_capture_id, created_at);
         """)
 
         # Idempotent column migrations (run after table creation)
@@ -180,6 +200,35 @@ def init():
             _add_column('raw_captures', col, typedef)
 
         _add_column('transformations', 'template_revid', 'INTEGER')  # template version at run time
+        _add_column('transformations', 'raw_revision_id', 'INTEGER')  # raw_revisions row consumed by this pass
+
+        _backfill_initial_revisions(c)
+
+
+def _backfill_initial_revisions(c) -> None:
+    """Ensure every existing capture has at least one raw_revisions row.
+
+    Captures created before versioning existed have no history. Give each a
+    single ``initial_fetch`` revision whose snapshot points directly at the
+    live file (no copy), so ``init()`` stays free of filesystem side effects
+    and remains safe to call against in-memory test databases. Idempotent:
+    only captures with zero revisions are backfilled.
+    """
+    rows = c.execute("""
+        SELECT rc.id, rc.captured_at, rc.file_path, rc.sha256, rc.size_bytes
+        FROM raw_captures rc
+        WHERE NOT EXISTS (
+            SELECT 1 FROM raw_revisions rr WHERE rr.raw_capture_id = rc.id
+        )
+    """).fetchall()
+    for cap in rows:
+        c.execute("""
+            INSERT INTO raw_revisions
+                (raw_capture_id, created_at, source, author, note,
+                 snapshot_path, sha256, size_bytes, restored_from)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (cap['id'], cap['captured_at'], 'initial_fetch', None, None,
+              cap['file_path'], cap['sha256'], cap['size_bytes'], None))
 
 
 # ── raw_captures ───────────────────────────────────────────────────────────────
@@ -229,6 +278,70 @@ def set_capture_locked(capture_id: int, locked: bool, wiki_revisions: int = None
         c.execute(
             'UPDATE raw_captures SET locked=?, wiki_revisions=? WHERE id=?',
             (1 if locked else 0, wiki_revisions, capture_id),
+        )
+
+
+# ── raw_revisions ────────────────────────────────────────────────────────────────
+
+def insert_raw_revision(raw_capture_id, created_at, source, author, note,
+                        snapshot_path, sha256, size_bytes,
+                        restored_from=None) -> int:
+    with conn() as c:
+        cur = c.execute("""
+            INSERT INTO raw_revisions
+                (raw_capture_id, created_at, source, author, note,
+                 snapshot_path, sha256, size_bytes, restored_from)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (raw_capture_id, created_at, source, author, note,
+              str(snapshot_path), sha256, size_bytes, restored_from))
+        return cur.lastrowid
+
+
+def get_raw_revisions(raw_capture_id: int) -> list[sqlite3.Row]:
+    """All revisions for a capture, oldest first."""
+    with conn() as c:
+        return c.execute(
+            'SELECT * FROM raw_revisions WHERE raw_capture_id = ? '
+            'ORDER BY created_at ASC, id ASC',
+            (raw_capture_id,),
+        ).fetchall()
+
+
+def get_raw_revision(revision_id: int) -> Optional[sqlite3.Row]:
+    with conn() as c:
+        return c.execute(
+            'SELECT * FROM raw_revisions WHERE id = ?', (revision_id,)
+        ).fetchone()
+
+
+def get_latest_raw_revision(raw_capture_id: int) -> Optional[sqlite3.Row]:
+    with conn() as c:
+        return c.execute(
+            'SELECT * FROM raw_revisions WHERE raw_capture_id = ? '
+            'ORDER BY id DESC LIMIT 1',
+            (raw_capture_id,),
+        ).fetchone()
+
+
+def update_raw_revision_snapshot(revision_id: int, snapshot_path) -> None:
+    """Repoint a revision at a newly-archived immutable snapshot.
+
+    Used to 'seal' the initial/backfilled revision (whose snapshot initially
+    points at the live file) into its own copy before the live file is
+    overwritten, so restoring it recovers the original content."""
+    with conn() as c:
+        c.execute(
+            'UPDATE raw_revisions SET snapshot_path=? WHERE id=?',
+            (str(snapshot_path), revision_id),
+        )
+
+
+def set_transformation_raw_revision(txn_id: int, raw_revision_id: int) -> None:
+    """Record which raw revision a transformation consumed as input."""
+    with conn() as c:
+        c.execute(
+            'UPDATE transformations SET raw_revision_id=? WHERE id=?',
+            (raw_revision_id, txn_id),
         )
 
 

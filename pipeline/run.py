@@ -143,6 +143,11 @@ def start_transformation(inp: PipelineInput, parent_txn_id: int | None) -> int:
         flags=inp.flags,
         input_sha256=input_sha256,
     )
+    # Record which raw revision fed this pass (matches by content hash so it's
+    # correct even when re-running against a human-edited raw).
+    latest_rev = db.get_latest_raw_revision(inp.capture_id)
+    if latest_rev and latest_rev['sha256'] == input_sha256:
+        db.set_transformation_raw_revision(txn_id, latest_rev['id'])
     log.info(f"[run] transformation id={txn_id}  capture={inp.capture_id}  parent={parent_txn_id}")
     return txn_id
 
