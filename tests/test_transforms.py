@@ -403,3 +403,30 @@ def test_fix_metadata_table_single_notetaker_unchanged_content():
     result = fix_metadata_table(text)
     assert '| Alice' in result
     assert '|-' in result
+
+def test_fix_metadata_table_ignores_row_separator_cell():
+    # A pre-existing |- row separator between Note-taker and Moderator must not
+    # be joined in as a spurious "-" name (issue #9).
+    text = (
+        '! Note-taker[s]\n'
+        '| NEWMAN \n'
+        '|-\n'
+        '! Moderator[s]\n'
+        '| Jet\n'
+    )
+    result = fix_metadata_table(text)
+    assert '| NEWMAN\n' in result
+    assert ', -' not in result
+    assert 'NEWMAN, -' not in result
+
+def test_fix_metadata_table_skips_dash_placeholder_cell():
+    text = (
+        '! Note-taker[s]\n'
+        '| Alice\n'
+        '| -\n'
+        '! Moderator[s]\n'
+        '| Bob\n'
+    )
+    result = fix_metadata_table(text)
+    assert '| Alice\n' in result
+    assert ', -' not in result

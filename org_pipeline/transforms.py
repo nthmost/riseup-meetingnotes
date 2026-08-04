@@ -468,8 +468,16 @@ def fix_metadata_table(text: str) -> str:
     def _join(m: re.Match) -> str:
         header = m.group(1)
         cells = m.group(2)
-        names = [re.sub(r'^\|\s*', '', line).strip()
-                 for line in cells.splitlines() if line.startswith('|')]
+        names = []
+        for line in cells.splitlines():
+            if not line.startswith('|'):
+                continue
+            name = re.sub(r'^\|\s*', '', line).strip()
+            # Skip wikitable row separators (|-) and empty/placeholder cells,
+            # which would otherwise be joined in as a spurious "-" name.
+            if name in ('', '-'):
+                continue
+            names.append(name)
         return f'{header}| {", ".join(names)}\n|-\n'
 
     return pattern.sub(_join, text)
