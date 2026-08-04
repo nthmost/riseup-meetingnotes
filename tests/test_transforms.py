@@ -430,3 +430,27 @@ def test_fix_metadata_table_skips_dash_placeholder_cell():
     result = fix_metadata_table(text)
     assert '| Alice\n' in result
     assert ', -' not in result
+
+def test_fix_metadata_table_ignores_styled_row_separator():
+    # Row separators may carry attributes (|- style="…"); they must not leak
+    # into the joined note-taker cell (issue #9).
+    text = (
+        '! Note-taker[s]\n'
+        '| Alice\n'
+        '|- style="background:#eee"\n'
+        '! Moderator[s]\n'
+        '| Bob\n'
+    )
+    result = fix_metadata_table(text)
+    assert '| Alice\n' in result
+    assert 'style' not in result.split('! Moderator')[0]
+
+def test_fix_metadata_table_preserves_hyphenated_name():
+    text = (
+        '! Note-taker[s]\n'
+        '| Jean-Luc\n'
+        '! Moderator[s]\n'
+        '| Bob\n'
+    )
+    result = fix_metadata_table(text)
+    assert '| Jean-Luc' in result

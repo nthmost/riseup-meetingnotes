@@ -472,9 +472,13 @@ def fix_metadata_table(text: str) -> str:
         for line in cells.splitlines():
             if not line.startswith('|'):
                 continue
+            # Skip wikitable row separators (|- , optionally with attributes
+            # like |- style="…"), which are not note-taker cells.
+            if re.match(r'^\|-', line):
+                continue
             name = re.sub(r'^\|\s*', '', line).strip()
-            # Skip wikitable row separators (|-) and empty/placeholder cells,
-            # which would otherwise be joined in as a spurious "-" name.
+            # Drop empty and lone-dash placeholder cells, which would otherwise
+            # be joined in as a spurious "-" name.
             if name in ('', '-'):
                 continue
             names.append(name)
