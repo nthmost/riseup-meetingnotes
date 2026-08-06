@@ -4,13 +4,13 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=www-data
-WorkingDirectory=/opt/meetingnotes
+User=nthmost
+WorkingDirectory=/opt/nbmeetingnotes
 # Tuesday meeting → fetch Wednesday morning; "yesterday" gives Tuesday's date
 ExecStart=/bin/bash -c '\
   DATE=$(date -d yesterday +%%Y_%%m_%%d) && \
-  /opt/meetingnotes/venv/bin/python3 -m pipeline.run \
+  /opt/nbmeetingnotes/venv/bin/python3 -m pipeline.run \
     --date "$DATE" --fetch-only'
-EnvironmentFile=/opt/meetingnotes/.env
+EnvironmentFile=/opt/nbmeetingnotes/.env
 StandardOutput=journal
 StandardError=journal

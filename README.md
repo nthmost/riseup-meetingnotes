@@ -266,37 +266,33 @@ Linux server running behind an Apache2 reverse proxy.
 
 ### First-time setup
 
-**1. Configure the deploy script** — set these environment variables before
-running `deploy.sh`, or edit the defaults at the top of the script:
+**1. Configure the deploy target** — the only required value is the SSH
+host. Copy the example config and set it:
 
 ```bash
-export NBARCHIVE_HOST=yourserver        # SSH hostname or IP
-export NBARCHIVE_REMOTE_DIR=/opt/nbmeetingnotes
-export NBARCHIVE_SERVICE=nbmeetingnotes
+cp deploy/deploy.env.example deploy/deploy.env
+# edit deploy/deploy.env → set MEETINGNOTES_HOST=yourserver
 ```
 
-Also update `User=` in `deploy/nbmeetingnotes.service` to match the
-server user that should run the process.
+`deploy/deploy.env` is gitignored. Everything else (remote dir, service
+name, user, log/data dirs) defaults to this project's standard layout —
+see the top of `deploy/deploy.sh` and override there if needed.
 
-**2. Run first-time setup** (creates dirs, venv, systemd units):
+**2. Run first-time setup** (creates dirs, venv, and installs + enables
+the systemd units):
 
 ```bash
 ./deploy/deploy.sh setup
 ```
 
-**3. Copy your `.env` to the server:**
+**3. Copy your `.env` to the server and start the service:**
 
 ```bash
 scp .env yourserver:/opt/nbmeetingnotes/.env
+ssh yourserver sudo systemctl start meetingnotes
 ```
 
-**4. Start the service:**
-
-```bash
-ssh yourserver sudo systemctl start nbmeetingnotes
-```
-
-**5. Establish the template baseline** — visit any meeting in the web UI
+**4. Establish the template baseline** — visit any meeting in the web UI
 and click **Check Wiki**. This fetches the current template version and
 stores it as the baseline. Future changes to the template will trigger
 a warning banner.
@@ -304,15 +300,15 @@ a warning banner.
 ### Subsequent deploys
 
 ```bash
-./deploy/deploy.sh          # rsync code + pip install + restart service
+./deploy/deploy.sh          # rsync code + pip install + sync units + restart
 ./deploy/deploy.sh restart  # restart service only
 ```
 
 ### Logs
 
 ```bash
-ssh yourserver journalctl -u nbmeetingnotes -f
-ssh yourserver tail -f /var/log/nbmeetingnotes/error.log
+ssh yourserver journalctl -u meetingnotes -f
+ssh yourserver tail -f /var/log/nbarchive/error.log
 ```
 
 ---

@@ -1,19 +1,19 @@
 [Unit]
-Description=Meeting Notes Archive
+Description=Meeting Notes Archive — nbmeetingnotes
 After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/opt/meetingnotes
-ExecStart=/opt/meetingnotes/venv/bin/gunicorn \
+User=nthmost
+WorkingDirectory=/opt/nbmeetingnotes
+ExecStart=/opt/nbmeetingnotes/venv/bin/gunicorn \
     --bind 127.0.0.1:8237 \
     --workers 2 \
     --timeout 60 \
-    --access-logfile /var/log/meetingnotes/access.log \
-    --error-logfile  /var/log/meetingnotes/error.log \
+    --access-logfile /var/log/nbarchive/access.log \
+    --error-logfile  /var/log/nbarchive/error.log \
     web.app:app
-EnvironmentFile=/opt/meetingnotes/.env
+EnvironmentFile=/opt/nbmeetingnotes/.env
 Restart=on-failure
 RestartSec=10
 
