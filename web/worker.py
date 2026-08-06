@@ -16,6 +16,7 @@ import db
 import urllib.error
 import urllib.request
 from pipeline.publish import publish as _publish
+from pipeline.rawedit import replace_raw_content
 from pipeline.run import run_pipeline, generate_summary_for_txn
 
 
@@ -37,10 +38,12 @@ def _auto_preview(txn_id: int, meeting_date: str) -> None:
 
 
 def _do_refresh_raw(capture: dict) -> None:
-    """Fetch pad content and overwrite the stored raw file + DB record."""
-    import hashlib
-    from datetime import datetime, timezone
+    """Fetch pad content and record it as a new raw revision.
 
+    Delegates the live-file swap and versioning to
+    :func:`pipeline.rawedit.replace_raw_content`, so a pad refresh produces a
+    tracked ``pad_refresh`` revision (not an untracked ``.bak`` file).
+    """
     req = urllib.request.Request(
         capture['source_url'],
         headers={'User-Agent': config.USER_AGENT},
@@ -48,26 +51,12 @@ def _do_refresh_raw(capture: dict) -> None:
     with urllib.request.urlopen(req, timeout=30) as resp:
         new_content = resp.read().decode('utf-8')
 
-    new_sha  = hashlib.sha256(new_content.encode()).hexdigest()
-    new_size = len(new_content.encode())
-    file_path = Path(capture['file_path'])
-
-    ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    backup = file_path.with_suffix(f'.{ts}.bak')
-    backup.write_bytes(file_path.read_bytes())
-    backup.chmod(0o444)
-
-    file_path.chmod(0o644)
-    file_path.write_text(new_content, 'utf-8')
-    file_path.chmod(0o444)
-
-    db.update_capture_content(
-        capture_id=capture['id'],
-        sha256=new_sha,
-        size_bytes=new_size,
-        captured_at=datetime.now(timezone.utc).isoformat(),
+    rev_id = replace_raw_content(
+        capture, new_content,
+        source='pad_refresh', author=None, note='pad re-fetch',
     )
-    log.info('refresh_raw: updated capture %d (%d bytes)', capture['id'], new_size)
+    log.info('refresh_raw: updated capture %d (revision %d)',
+             capture['id'], rev_id)
 
 
 def _run_job(job: dict, capture: dict, flags: dict) -> int:

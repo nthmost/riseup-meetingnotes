@@ -2,6 +2,7 @@
 web/app.py — Flask application for nbmeetingnotes archive viewer.
 """
 import concurrent.futures
+import difflib
 import hashlib
 import json
 import sys
@@ -23,6 +24,7 @@ from flask_wtf.csrf import CSRFProtect
 import config
 import db
 from pipeline.publish import publish as _publish
+from pipeline.rawedit import normalize, replace_raw_content
 from pipeline.run import fetch_only, insert_summary_pass
 from web.auth import current_user, login_required, verify_wiki_credentials
 from web.worker import start as _start_worker
@@ -49,6 +51,17 @@ ISSUE_LABELS = {
     'spelling':    'Spelling / typos',
     'missing_data': 'Missing data',
 }
+
+REVISION_SOURCE_LABELS = {
+    'initial_fetch': 'Initial fetch',
+    'pad_refresh':   'Pad refresh',
+    'human_edit':    'Human edit',
+    'restore':       'Restore',
+}
+
+# Upper bound on raw note size a human may save (guards against paste bombs).
+MAX_RAW_BYTES = 2 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = MAX_RAW_BYTES + 64 * 1024  # + form overhead
 
 
 # ── template helpers ───────────────────────────────────────────────────────────
@@ -106,6 +119,16 @@ def _enrich_txn(row) -> dict:
     d['_is_final_published'] = bool(d.get('published_to'))
     d['_is_preview_published'] = bool(d.get('preview_published_to'))
     d['_generated_summary'] = d.get('generated_summary')
+    return d
+
+
+def _enrich_revision(row) -> dict:
+    d = dict(row)
+    d['_created_pretty'] = _fmt_ts(d.get('created_at'))
+    d['_size_pretty'] = _fmt_size(d.get('size_bytes', 0))
+    d['_source_label'] = REVISION_SOURCE_LABELS.get(d['source'], d['source'])
+    d['_short_sha'] = (d.get('sha256') or '')[:12]
+    d['_snapshot_exists'] = Path(d['snapshot_path']).exists()
     return d
 
 
@@ -201,19 +224,144 @@ def raw(date_str: str):
     capture = db.get_capture_by_date(date_str)
     if not capture:
         abort(404)
-    path = Path(capture['file_path'])
+
+    # ?rev=<id> serves a specific archived revision instead of the live file.
+    rev_id = request.args.get('rev', type=int)
+    if rev_id:
+        rev = db.get_raw_revision(rev_id)
+        if not rev or rev['raw_capture_id'] != capture['id']:
+            abort(404)
+        path = Path(rev['snapshot_path'])
+        filename = f'raw_{date_str}_rev{rev_id}.txt'
+    else:
+        path = Path(capture['file_path'])
+        filename = f'raw_{date_str}.txt'
+
     if not path.exists():
         abort(404)
     return Response(
         path.read_text('utf-8'),
         mimetype='text/plain; charset=utf-8',
-        headers={'Content-Disposition': f'inline; filename="raw_{date_str}.txt"'},
+        headers={'Content-Disposition': f'inline; filename="{filename}"'},
     )
 
 
 @app.route('/robots.txt')
 def robots():
     return Response('User-agent: *\nDisallow: /\n', mimetype='text/plain')
+
+
+# ── routes: raw editing (login required) ──────────────────────────────────────
+
+@app.route('/edit/<date_str>', methods=['GET'])
+@login_required
+def edit_raw(date_str: str):
+    """Show the raw-notes editor plus full revision history.
+
+    Deliberately not gated by lock state or meeting date: fixing a source-level
+    disaster (e.g. the wrong template) must work even after publishing.
+    """
+    capture = db.get_capture_by_date(date_str)
+    if not capture:
+        abort(404)
+    capture = _enrich_capture(capture)
+
+    path = Path(capture['file_path'])
+    raw_content = path.read_text('utf-8') if capture['_raw_exists'] else ''
+    current_lines = raw_content.splitlines(keepends=True)
+
+    revisions = [_enrich_revision(r) for r in db.get_raw_revisions(capture['id'])]
+    for rev in revisions:
+        rev['_is_current'] = rev['sha256'] == capture['sha256']
+        rev['_diff'] = _diff_vs_current(rev, current_lines)
+    revisions.reverse()  # newest first for display
+
+    return render_template(
+        'edit_raw.html',
+        capture=capture,
+        raw_content=raw_content,
+        base_sha256=capture['sha256'],
+        revisions=revisions,
+    )
+
+
+def _diff_vs_current(rev: dict, current_lines: list[str],
+                     max_lines: int = 400) -> str | None:
+    """Unified diff of a revision's snapshot against the current live content.
+
+    Returns None when the snapshot is missing or identical to current, or a
+    'diff too large' notice past ``max_lines``."""
+    if rev['_is_current'] or not rev['_snapshot_exists']:
+        return None
+    snap_lines = Path(rev['snapshot_path']).read_text('utf-8').splitlines(keepends=True)
+    diff = list(difflib.unified_diff(
+        snap_lines, current_lines,
+        fromfile='revision (this)', tofile='current', lineterm='',
+    ))
+    if not diff:
+        return None
+    if len(diff) > max_lines:
+        return ('\n'.join(diff[:max_lines])
+                + f'\n… diff truncated ({len(diff) - max_lines} more lines).')
+    return '\n'.join(diff)
+
+
+@app.route('/edit/<date_str>', methods=['POST'])
+@login_required
+def save_raw(date_str: str):
+    capture = db.get_capture_by_date(date_str)
+    if not capture:
+        abort(404)
+
+    content = normalize(request.form.get('content', ''))
+    note = (request.form.get('note') or '').strip() or None
+    base_sha256 = request.form.get('base_sha256', '')
+
+    if not content.strip():
+        abort(400, 'Cannot save empty raw content.')
+    if len(content.encode('utf-8')) > MAX_RAW_BYTES:
+        abort(413, 'Raw content exceeds the maximum allowed size.')
+
+    # Optimistic concurrency: reject if the raw changed since editing started.
+    if base_sha256 and base_sha256 != capture['sha256']:
+        return redirect(url_for('edit_raw', date_str=date_str, conflict=1))
+
+    # No-op if unchanged — don't create a noise revision.
+    if hashlib.sha256(content.encode('utf-8')).hexdigest() == capture['sha256']:
+        return redirect(url_for('edit_raw', date_str=date_str, unchanged=1))
+
+    replace_raw_content(
+        capture, content,
+        source='human_edit', author=current_user(), note=note,
+    )
+    return redirect(url_for('view', date_str=date_str, edited=1))
+
+
+@app.route('/restore/<date_str>/<int:revision_id>', methods=['POST'])
+@login_required
+def restore_raw(date_str: str, revision_id: int):
+    capture = db.get_capture_by_date(date_str)
+    if not capture:
+        abort(404)
+    rev = db.get_raw_revision(revision_id)
+    if not rev or rev['raw_capture_id'] != capture['id']:
+        abort(404)
+
+    snap = Path(rev['snapshot_path'])
+    if not snap.exists():
+        abort(409, 'Snapshot file for that revision is missing from disk.')
+
+    content = normalize(snap.read_text('utf-8'))
+    if hashlib.sha256(content.encode('utf-8')).hexdigest() == capture['sha256']:
+        return redirect(url_for('edit_raw', date_str=date_str, unchanged=1))
+
+    replace_raw_content(
+        capture, content,
+        source='restore', author=current_user(),
+        note=f'restored revision #{revision_id}',
+        restored_from=revision_id,
+    )
+    return redirect(url_for('view', date_str=date_str, restored=revision_id))
 
 
 # ── routes: rating (login required) ───────────────────────────────────────────
