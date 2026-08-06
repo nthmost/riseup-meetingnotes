@@ -247,6 +247,16 @@
             </button>
           </form>
 
+          {# Still available while the archive DB shows the page unpublished #}
+          {% if not txn._is_final_published %}
+          <form method="post" action="/detect-published/{{ capture.id }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="win-btn" style="padding:3px 10px;" title="Check if notes are already on the wiki">
+              🔍 Check Wiki
+            </button>
+          </form>
+          {% endif %}
+
           <div class="win-toolbar-sep"></div>
 
           {# Publish workflow #}
