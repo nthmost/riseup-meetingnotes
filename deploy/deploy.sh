@@ -37,6 +37,8 @@ sync_code() {
         --exclude '__pycache__' --exclude '*.pyc' \
         --exclude '.env' --exclude 'venv/' --exclude '.venv/' \
         --exclude '.git/' --exclude 'deploy/' --exclude 'data/' \
+        --exclude '.claude/' --exclude '.pytest_cache/' \
+        --exclude '.DS_Store' --exclude '.coverage' --exclude 'htmlcov/' \
         --exclude '*.db' --exclude '*.db-shm' --exclude '*.db-wal' \
         "$LOCAL_SRC/" "$HOST:$REMOTE_DIR/"
 }
@@ -52,6 +54,7 @@ sync_units() {
         sudo cp /tmp/meetingnotes-fetch.service /etc/systemd/system/meetingnotes-fetch.service
         sudo cp /tmp/meetingnotes-fetch.timer   /etc/systemd/system/meetingnotes-fetch.timer
         sudo systemctl daemon-reload
+        rm -f /tmp/meetingnotes.service /tmp/meetingnotes-fetch.service /tmp/meetingnotes-fetch.timer
     "
 }
 

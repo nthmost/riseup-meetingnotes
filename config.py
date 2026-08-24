@@ -21,8 +21,8 @@ def _warn_if_missing(value: str, var: str, description: str) -> str:
 
 
 # Storage
-RAW_DIR  = Path(os.environ.get('NB_RAW_DIR',  '/var/lib/meetingnotes/raw'))
-DB_PATH  = Path(os.environ.get('NB_DB_PATH',  '/var/lib/meetingnotes/provenance.db'))
+RAW_DIR  = Path(os.environ.get('NB_RAW_DIR',  '/var/lib/nbmeetingnotes/raw'))
+DB_PATH  = Path(os.environ.get('NB_DB_PATH',  '/var/lib/nbmeetingnotes/provenance.db'))
 
 # Pad source — required; no default so the specific pad URL stays out of source
 PAD_URL = _warn_if_missing(
