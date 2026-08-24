@@ -225,6 +225,66 @@ Login uses your wiki username and password.
 
 ---
 
+## Web UI workflow
+
+The archive index lists every meeting. Opening one shows the raw capture, the
+latest processed output, and — for logged-in users — a toolbar that changes
+with the meeting's state. Nothing runs automatically from the UI; you drive
+each meeting through the steps below.
+
+**Always available:**
+
+- **✏ Edit Raw** — edit the raw notes (versioned; every edit and restore is preserved)
+- **📋 History** — browse every pipeline pass for this meeting
+- **Pass N** — switch between passes
+- **↗ Open in Tab** — open the live wiki page
+
+**Before processing** (no output exists yet):
+
+- **🔍 Check Wiki** — see below
+- **▶ Run Pipeline** — transform the current raw capture into a new pass
+
+**After processing** (output exists):
+
+- **↻ Re-run Pipeline** — reprocess the current raw capture as a new pass
+  (always from the raw source, never a previous output)
+- **✨ Generate Summary** / **↻ Regenerate Summary** — generate an AI summary
+  you review and edit; applying it creates a new pass
+- **🔍 Check Wiki** — remains available until the meeting is marked published
+- **📋 Publish Preview** — publish a draft to the preview page
+  (`User:Bot/Meeting_Notes_…`); becomes **✓ Preview ↗** once done
+- **🌐 Publish Meeting Notes** — publish to the official
+  `Meeting_Notes_YYYY_MM_DD` page; becomes **✓ Published** once done
+
+### Check Wiki
+
+**Check Wiki** asks the wiki whether `Meeting_Notes_YYYY_MM_DD` already exists,
+and does two things:
+
+1. **Detects pre-existing publications.** If the page is already on the wiki
+   (published by hand, or before this tool existed), it records an import
+   transformation in the archive, marks the meeting published, and locks it —
+   so the tool never silently overwrites notes it didn't create.
+2. **Tracks the template baseline.** It snapshots the current meeting-notes
+   template revision. The first snapshot becomes the baseline; later revisions
+   raise a warning banner until a logged-in user acknowledges them.
+
+The button stays available for as long as the archive DB shows the page as
+unpublished (`published_to` is null) — **including after the pipeline has run
+and a preview exists.** Once the meeting is marked published — by a successful
+publish, or by Check Wiki detecting an existing page — the button is replaced
+by the **✓ Published** indicator.
+
+### Publish lock
+
+After a meeting is published, people often keep editing the wiki page directly.
+When the archive sees the wiki page has been edited since publication, it
+**locks** the meeting: the publish control becomes
+**🔒 N wiki edits — Unlock to publish**, and re-publishing (which would
+overwrite those edits) requires an explicit unlock first.
+
+---
+
 ## CLI pipeline
 
 ```bash
