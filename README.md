@@ -371,6 +371,66 @@ ssh yourserver journalctl -u meetingnotes -f
 ssh yourserver tail -f /var/log/nbarchive/error.log
 ```
 
+### Scheduled pad fetch
+
+Meetings are ingested automatically by a **weekly systemd timer**, not by the
+web UI:
+
+- `meetingnotes-fetch.timer` fires **Wednesday 11:00 UTC** (≈ 4am PDT), the
+  morning after the Tuesday meeting.
+- `meetingnotes-fetch.service` runs
+  `pipeline.run --date $(date -d yesterday +%Y_%m_%d) --fetch-only`, archiving
+  whatever is currently on the pad (`NB_PAD_URL`) under **yesterday's** date
+  (i.e. the Tuesday meeting date).
+
+The pad is a single live document that gets overwritten for each meeting, so
+the fetch only captures the correct notes if it runs **before** the pad is
+reused for the next meeting.
+
+```bash
+ssh yourserver systemctl list-timers meetingnotes-fetch.timer
+ssh yourserver systemctl status meetingnotes-fetch.service
+ssh yourserver journalctl -u meetingnotes-fetch.service --since '-8 days'
+```
+
+> **Known limitation — a failed fetch silently drops that meeting.** The fetch
+> is a `oneshot` with **no retry**: if the Wednesday run fails (transient pad or
+> network error), that week's meeting is never captured and simply won't appear
+> in the archive. `Persistent=true` only reruns a *missed* timer (host was off),
+> not a *failed* one. Watch for a `failed` state on the service. (This is exactly
+> what happened to the 2026-10-20 meeting — the Oct 21 fetch failed and the
+> meeting was absent until manually re-fetched.)
+
+### Recovering a missing meeting
+
+If a meeting is missing from the archive (failed fetch, or the timer didn't
+run), re-fetch it manually **while the pad still holds those notes** — once the
+pad is overwritten for the next meeting, the raw content is gone:
+
+```bash
+ssh yourserver
+cd /opt/nbmeetingnotes
+# load the service env the same way systemd does
+export $(grep -E '^[A-Z_]+=' .env | sed 's/#.*//' | xargs -d '\n')
+venv/bin/python3 -m pipeline.run --date YYYY_MM_DD --fetch-only
+```
+
+Use the **meeting's** date for `--date` (the pad content, not today). The
+pipeline CLI logs only at `INFO` and logging is unconfigured, so a successful
+`--fetch-only` prints nothing and exits 0 — verify by checking the archive
+index or the capture row:
+
+```bash
+venv/bin/python3 -c "import db; db.init(); \
+  print([(r['meeting_date'], r['id']) for r in db.conn().execute( \
+  'SELECT meeting_date,id FROM raw_captures ORDER BY meeting_date DESC LIMIT 5')])"
+```
+
+> **Note on data dir:** the live deployment stores raw `.txt`/`.wiki` files and
+> `provenance.db` in `/var/lib/nbmeetingnotes` (the `config.py` defaults). An
+> `NB_RAW_DIR` pointing elsewhere in `.env` is not honored by the running app —
+> confirm the real path via `config.RAW_DIR` before poking at files on disk.
+
 ---
 
 ## Contributing
