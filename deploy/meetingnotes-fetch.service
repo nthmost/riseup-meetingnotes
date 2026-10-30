@@ -1,16 +1,32 @@
 [Unit]
 Description=MeetingNotes — fetch raw pad content from Riseup
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=nthmost
 WorkingDirectory=/opt/nbmeetingnotes
-# Tuesday meeting → fetch Wednesday morning; "yesterday" gives Tuesday's date
+# Allow the retry loop below to sleep between attempts without tripping the
+# oneshot start timeout (4 retries × 300s + run time).
+TimeoutStartSec=1800
+# Tuesday meeting → fetch Wednesday morning; "yesterday" gives Tuesday's date.
+# The pad is a single live doc that gets overwritten for the next meeting, and
+# a dropped fetch silently loses that week's notes — so retry transient pad or
+# network failures up to 5 times, 5 min apart. --fetch-only is idempotent per
+# date (a re-run on an already-captured date is a harmless no-op), so retries
+# and overlapping timer fires are safe.
 ExecStart=/bin/bash -c '\
-  DATE=$(date -d yesterday +%%Y_%%m_%%d) && \
-  /opt/nbmeetingnotes/venv/bin/python3 -m pipeline.run \
-    --date "$DATE" --fetch-only'
+  DATE=$(date -d yesterday +%%Y_%%m_%%d); \
+  for attempt in 1 2 3 4 5; do \
+    if /opt/nbmeetingnotes/venv/bin/python3 -m pipeline.run --date "$DATE" --fetch-only; then \
+      echo "fetch succeeded for $DATE (attempt $attempt)"; exit 0; \
+    fi; \
+    echo "fetch attempt $attempt for $DATE failed"; \
+    [ "$attempt" -lt 5 ] && { echo "retrying in 300s"; sleep 300; }; \
+  done; \
+  echo "fetch for $DATE FAILED after 5 attempts — meeting may be missing from the archive"; \
+  exit 1'
 EnvironmentFile=/opt/nbmeetingnotes/.env
 StandardOutput=journal
 StandardError=journal

@@ -393,13 +393,20 @@ ssh yourserver systemctl status meetingnotes-fetch.service
 ssh yourserver journalctl -u meetingnotes-fetch.service --since '-8 days'
 ```
 
-> **Known limitation — a failed fetch silently drops that meeting.** The fetch
-> is a `oneshot` with **no retry**: if the Wednesday run fails (transient pad or
-> network error), that week's meeting is never captured and simply won't appear
-> in the archive. `Persistent=true` only reruns a *missed* timer (host was off),
-> not a *failed* one. Watch for a `failed` state on the service. (This is exactly
-> what happened to the 2026-10-20 meeting — the Oct 21 fetch failed and the
-> meeting was absent until manually re-fetched.)
+**Retry on transient failure.** The fetch is a `oneshot`, which systemd never
+auto-restarts, so the retry lives inside `ExecStart`: it reattempts up to **5
+times, 5 minutes apart** before giving up (`TimeoutStartSec=1800` leaves room
+for the sleeps). `--fetch-only` is idempotent per date — a re-run on an
+already-captured date is a harmless no-op — so retries never duplicate a
+capture. This exists because a dropped fetch *silently* loses that week's
+notes once the pad is reused.
+
+> **Residual limitation.** If the pad or wiki is unreachable for the entire
+> ~20-minute retry window, the meeting is still missed and the service ends in
+> `failed` state (`Persistent=true` only reruns a *missed* timer — host off —
+> not a *failed* one). Watch for a `failed` state and recover manually (below).
+> This is what happened to the 2026-10-20 meeting before the retry was added:
+> the Oct 21 fetch failed outright and the meeting was absent until re-fetched.
 
 ### Recovering a missing meeting
 
